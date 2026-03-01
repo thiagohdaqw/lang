@@ -8,58 +8,58 @@
 #define STRING_MAX_LENGTH 1023
 
 typedef enum token_t {
-  T_UNKNOWN,
-  T_NEW_LINE,
-  T_CHAR,
-  T_STRING,
-  T_LITERAL,
-  T_IDENTIFIER,
-  T_LONG,
-  T_DOUBLE,
+    T_UNKNOWN,
+    T_NEW_LINE,
+    T_CHAR,
+    T_STRING,
+    T_LITERAL,
+    T_IDENTIFIER,
+    T_LONG,
+    T_DOUBLE,
 } TokenType;
 
 typedef struct token {
-  TokenType type;
+    TokenType type;
 
-  long long_value;
-  double double_value;
-  char literal_value;
-  char char_value;
+    long long_value;
+    double double_value;
+    char literal_value;
+    char char_value;
 
-  char identifier_value[IDENTIFIER_MAX_LENGTH + 1];
-  int identifier_size;
+    char identifier_value[IDENTIFIER_MAX_LENGTH + 1];
+    int identifier_size;
 
-  char string_value[STRING_MAX_LENGTH + 1];
-  int string_size;
+    char string_value[STRING_MAX_LENGTH + 1];
+    int string_size;
 } Token;
 
 typedef struct reader {
-  char* reader;
-  long position;
-  long size;
-  long row;
-  long col;
+    char *reader;
+    long position;
+    long size;
+    long row;
+    long col;
 } Reader;
 
 typedef struct lexer {
-  const char* path;
+    const char *path;
 
-  Token token;
-  Reader reader;
+    Token token;
+    Reader reader;
 } Lexer;
 
-#define LEXER_ERROR_PRINT(l, fmt, ...)                                     \
-  fprintf(stderr, "[ERROR]: %s:%d:%d => " fmt, l->path, l->reader.row + 1, \
-          l->reader.col, ##__VA_ARGS__)
+#define LEXER_ERROR_PRINT(l, fmt, ...)                                         \
+    fprintf(stderr, "[ERROR]: %s:%d:%d => " fmt, l->path, l->reader.row + 1,   \
+            l->reader.col, ##__VA_ARGS__)
 
-bool lexer_create(Lexer* lexer, const char* path);
-void lexer_close(Lexer* lexer);
-Reader lexer_save_reader(Lexer* lexer);
-void lexer_rewind_reader(Lexer* lexer, Reader reader);
-bool lexer_is_eof(Lexer* lexer);
-bool lexer_next_token(Lexer* lexer);
+bool lexer_create(Lexer *lexer, const char *path);
+void lexer_close(Lexer *lexer);
+Reader lexer_save_reader(Lexer *lexer);
+void lexer_rewind_reader(Lexer *lexer, Reader reader);
+bool lexer_is_eof(Lexer *lexer);
+bool lexer_next_token(Lexer *lexer);
 
-#endif  // __LEXER_H_INCLUDED__
+#endif // __LEXER_H_INCLUDED__
 
 #ifndef __LEXER_H_IMP__
 #define __LEXER_H_IMP__
@@ -73,224 +73,230 @@ bool lexer_next_token(Lexer* lexer);
 #include <string.h>
 
 #define get_char(l) (l->reader.reader[l->reader.position])
-#define is_eof(l)                                                \
-  ((!l->reader.reader || l->reader.position >= l->reader.size || \
-    l->reader.position >= 0 && get_char(l) == 0))
+#define is_eof(l)                                                              \
+    ((!l->reader.reader || l->reader.position >= l->reader.size ||             \
+      l->reader.position >= 0 && get_char(l) == 0))
 #define is_identifier_char(c) (isalpha(c) || (c) == '_')
 
 #define char_to_int(c) ((c) - '0')
 
-bool lexer_is_eof(Lexer* lexer) { return is_eof(lexer); }
+bool lexer_is_eof(Lexer *lexer) { return is_eof(lexer); }
 
-char* read_file(const char* filename, long* size) {
-  FILE* f = fopen(filename, "rb");
-  if (!f) return NULL;
+char *read_file(const char *filename, long *size) {
+    FILE *f = fopen(filename, "rb");
+    if (!f)
+        return NULL;
 
-  fseek(f, 0, SEEK_END);
-  *size = ftell(f);
-  fseek(f, 0, SEEK_SET);
+    fseek(f, 0, SEEK_END);
+    *size = ftell(f);
+    fseek(f, 0, SEEK_SET);
 
-  char* buffer = (char*)malloc(*size + 1);
-  fread(buffer, 1, *size, f);
-  buffer[*size] = '\0';
+    char *buffer = (char *)malloc(*size + 1);
+    fread(buffer, 1, *size, f);
+    buffer[*size] = '\0';
 
-  fclose(f);
-  return buffer;
+    fclose(f);
+    return buffer;
 }
 
-bool lexer_create(Lexer* lexer, const char* path) {
-  memset(lexer, 0, sizeof(*lexer));
+bool lexer_create(Lexer *lexer, const char *path) {
+    memset(lexer, 0, sizeof(*lexer));
 
-  lexer->path = path;
-  lexer->reader.reader = read_file(path, &lexer->reader.size);
-  lexer->reader.position = -1;
+    lexer->path = path;
+    lexer->reader.reader = read_file(path, &lexer->reader.size);
+    lexer->reader.position = -1;
 
-  if (!lexer->reader.reader || lexer->reader.size <= 0) {
-    LEXER_ERROR_PRINT(lexer, "Failed to read %s: %s\n", path, strerror(errno));
-    return false;
-  }
-
-  return true;
-}
-
-void lexer_close(Lexer* lexer) { free((void*)lexer->reader.reader); }
-
-Reader lexer_save_reader(Lexer* lexer) { return lexer->reader; }
-void lexer_rewind_reader(Lexer* lexer, Reader reader) {
-  lexer->reader = reader;
-}
-
-char next_char(Lexer* lexer) {
-  if (lexer->reader.position >= 0 && get_char(lexer) == '\n') {
-    lexer->reader.row++;
-    lexer->reader.col = 0;
-  }
-  lexer->reader.col++;
-  lexer->reader.position++;
-  return is_eof(lexer) ? 0 : get_char(lexer);
-}
-
-bool skip_space(Lexer* lexer) {
-  while (!is_eof(lexer) && isspace(get_char(lexer))) {
-    if (get_char(lexer) == '\n') {
-      return true;
+    if (!lexer->reader.reader || lexer->reader.size <= 0) {
+        LEXER_ERROR_PRINT(lexer, "Failed to read %s: %s\n", path,
+                          strerror(errno));
+        return false;
     }
-    next_char(lexer);
-  }
-  return !is_eof(lexer);
+
+    return true;
 }
 
-bool parse_char(Lexer* lexer) {
-  next_char(lexer);
-  if (is_eof(lexer)) {
-    LEXER_ERROR_PRINT(lexer, "Expected a character but got EOF\n");
-    return false;
-  }
+void lexer_close(Lexer *lexer) { free((void *)lexer->reader.reader); }
 
-  lexer->token.type = T_CHAR;
-  lexer->token.char_value = get_char(lexer);
-
-  next_char(lexer);
-  if (is_eof(lexer)) {
-    LEXER_ERROR_PRINT(lexer, "Expected a ' character but got EOF\n");
-    return false;
-  }
-  if (get_char(lexer) != '\'') {
-    LEXER_ERROR_PRINT(lexer, "Expected a ' character but got %c\n",
-                      get_char(lexer));
-    return false;
-  }
-  return true;
+Reader lexer_save_reader(Lexer *lexer) { return lexer->reader; }
+void lexer_rewind_reader(Lexer *lexer, Reader reader) {
+    lexer->reader = reader;
 }
 
-bool parse_string(Lexer* lexer) {
-  lexer->token.type = T_STRING;
-  lexer->token.identifier_size = 0;
-  while (1) {
+char next_char(Lexer *lexer) {
+    if (lexer->reader.position >= 0 && get_char(lexer) == '\n') {
+        lexer->reader.row++;
+        lexer->reader.col = 0;
+    }
+    lexer->reader.col++;
+    lexer->reader.position++;
+    return is_eof(lexer) ? 0 : get_char(lexer);
+}
+
+bool skip_space(Lexer *lexer) {
+    while (!is_eof(lexer) && isspace(get_char(lexer))) {
+        if (get_char(lexer) == '\n') {
+            return true;
+        }
+        next_char(lexer);
+    }
+    return !is_eof(lexer);
+}
+
+bool parse_char(Lexer *lexer) {
     next_char(lexer);
     if (is_eof(lexer)) {
-      LEXER_ERROR_PRINT(lexer, "Expected \" closing string but got EOF\n");
-      return false;
+        LEXER_ERROR_PRINT(lexer, "Expected a character but got EOF\n");
+        return false;
     }
-    if (get_char(lexer) == '"') {
-      break;
-    }
-    if (lexer->token.string_size + 1 >= STRING_MAX_LENGTH) {
-      LEXER_ERROR_PRINT(lexer,
-                        "String size cant be greater than %d characters\n",
-                        STRING_MAX_LENGTH - 1);
-      return false;
-    }
-    lexer->token.string_value[lexer->token.string_size++] = get_char(lexer);
-  }
 
-  lexer->token.string_value[lexer->token.string_size] = 0;
-  return true;
+    lexer->token.type = T_CHAR;
+    lexer->token.char_value = get_char(lexer);
+
+    next_char(lexer);
+    if (is_eof(lexer)) {
+        LEXER_ERROR_PRINT(lexer, "Expected a ' character but got EOF\n");
+        return false;
+    }
+    if (get_char(lexer) != '\'') {
+        LEXER_ERROR_PRINT(lexer, "Expected a ' character but got %c\n",
+                          get_char(lexer));
+        return false;
+    }
+    return true;
 }
 
-bool parse_literal(Lexer* lexer) {
-  lexer->token.type = T_LITERAL;
-  lexer->token.literal_value = get_char(lexer);
-  return true;
+bool parse_string(Lexer *lexer) {
+    lexer->token.type = T_STRING;
+    lexer->token.identifier_size = 0;
+    while (1) {
+        next_char(lexer);
+        if (is_eof(lexer)) {
+            LEXER_ERROR_PRINT(lexer,
+                              "Expected \" closing string but got EOF\n");
+            return false;
+        }
+        if (get_char(lexer) == '"') {
+            break;
+        }
+        if (lexer->token.string_size + 1 >= STRING_MAX_LENGTH) {
+            LEXER_ERROR_PRINT(
+                lexer, "String size cant be greater than %d characters\n",
+                STRING_MAX_LENGTH - 1);
+            return false;
+        }
+        lexer->token.string_value[lexer->token.string_size++] = get_char(lexer);
+    }
+
+    lexer->token.string_value[lexer->token.string_size] = 0;
+    return true;
 }
 
-bool parse_identifier(Lexer* lexer) {
-  Reader r = lexer_save_reader(lexer);
+bool parse_literal(Lexer *lexer) {
+    lexer->token.type = T_LITERAL;
+    lexer->token.literal_value = get_char(lexer);
+    return true;
+}
 
-  lexer->token.identifier_size = 0;
-  lexer->token.identifier_value[lexer->token.identifier_size++] =
-      get_char(lexer);
+bool parse_identifier(Lexer *lexer) {
+    Reader r = lexer_save_reader(lexer);
 
-  next_char(lexer);
-  if (is_eof(lexer) || !is_identifier_char(get_char(lexer))) {
-    lexer_rewind_reader(lexer, r);
-    return parse_literal(lexer);
-  }
-
-  while (1) {
-    if (lexer->token.identifier_size + 1 >= IDENTIFIER_MAX_LENGTH) {
-      fprintf(stderr,
-              "[LEXER]: %s:%d:%d => Unexpected identifier size too large\n",
-              lexer->path, lexer->reader.row, lexer->reader.col);
-      return false;
-    }
+    lexer->token.identifier_size = 0;
     lexer->token.identifier_value[lexer->token.identifier_size++] =
         get_char(lexer);
-    r = lexer_save_reader(lexer);
+
     next_char(lexer);
     if (is_eof(lexer) || !is_identifier_char(get_char(lexer))) {
-      lexer_rewind_reader(lexer, r);
-      break;
+        lexer_rewind_reader(lexer, r);
+        return parse_literal(lexer);
     }
-  }
 
-  lexer->token.type = T_IDENTIFIER;
-  lexer->token.identifier_value[lexer->token.identifier_size] = 0;
+    while (1) {
+        if (lexer->token.identifier_size + 1 >= IDENTIFIER_MAX_LENGTH) {
+            fprintf(
+                stderr,
+                "[LEXER]: %s:%d:%d => Unexpected identifier size too large\n",
+                lexer->path, lexer->reader.row, lexer->reader.col);
+            return false;
+        }
+        lexer->token.identifier_value[lexer->token.identifier_size++] =
+            get_char(lexer);
+        r = lexer_save_reader(lexer);
+        next_char(lexer);
+        if (is_eof(lexer) || !is_identifier_char(get_char(lexer))) {
+            lexer_rewind_reader(lexer, r);
+            break;
+        }
+    }
 
-  return true;
+    lexer->token.type = T_IDENTIFIER;
+    lexer->token.identifier_value[lexer->token.identifier_size] = 0;
+
+    return true;
 }
 
-bool parse_number(Lexer* lexer, int factor) {
-  char* start = &lexer->reader.reader[lexer->reader.position];
-  bool isDouble = false;
+bool parse_number(Lexer *lexer, int factor) {
+    char *start = &lexer->reader.reader[lexer->reader.position];
+    bool isDouble = false;
 
-  while (1) {
+    while (1) {
+        Reader r = lexer_save_reader(lexer);
+        next_char(lexer);
+
+        if (!is_eof(lexer) && !isDouble && get_char(lexer) == '.') {
+            isDouble = true;
+            continue;
+        }
+
+        if (is_eof(lexer) || !isdigit(get_char(lexer))) {
+            lexer_rewind_reader(lexer, r);
+            break;
+        }
+    }
+
+    if (isDouble) {
+        lexer->token.type = T_DOUBLE;
+        lexer->token.double_value = factor * strtod(start, NULL);
+        return true;
+    }
+    lexer->token.type = T_LONG;
+    lexer->token.long_value = factor * strtol(start, NULL, 10);
+    return true;
+}
+
+char lexer_peek_next_char(Lexer *lexer) {
     Reader r = lexer_save_reader(lexer);
+    char value = next_char(lexer);
+    lexer_rewind_reader(lexer, r);
+    return value;
+}
+
+bool lexer_next_token(Lexer *lexer) {
     next_char(lexer);
 
-    if (!is_eof(lexer) && !isDouble && get_char(lexer) == '.') {
-      isDouble = true;
-      continue;
+    if (is_eof(lexer))
+        return false;
+
+    if (!skip_space(lexer))
+        return false;
+
+    if (get_char(lexer) == '\n') {
+        lexer->token.type = T_NEW_LINE;
+        return true;
     }
 
-    if (is_eof(lexer) || !isdigit(get_char(lexer))) {
-      lexer_rewind_reader(lexer, r);
-      break;
+    if (isdigit(get_char(lexer))) {
+        return parse_number(lexer, 1);
     }
-  }
-
-  if (isDouble) {
-    lexer->token.type = T_DOUBLE;
-    lexer->token.double_value = factor * strtod(start, NULL);
-    return true;
-  }
-  lexer->token.type = T_LONG;
-  lexer->token.long_value = factor * strtol(start, NULL, 10);
-  return true;
+    if (isalnum(get_char(lexer))) {
+        return parse_identifier(lexer);
+    }
+    if (get_char(lexer) == '\'') {
+        return parse_char(lexer);
+    }
+    if (get_char(lexer) == '"') {
+        return parse_string(lexer);
+    }
+    return parse_literal(lexer);
 }
 
-char lexer_peek_next_char(Lexer* lexer) {
-  Reader r = lexer_save_reader(lexer);
-  char value = next_char(lexer);
-  lexer_rewind_reader(lexer, r);
-  return value;
-}
-
-bool lexer_next_token(Lexer* lexer) {
-  next_char(lexer);
-
-  if (is_eof(lexer)) return false;
-
-  if (!skip_space(lexer)) return false;
-
-  if (get_char(lexer) == '\n') {
-    lexer->token.type = T_NEW_LINE;
-    return true;
-  }
-
-  if (isdigit(get_char(lexer))) {
-    return parse_number(lexer, 1);
-  }
-  if (isalnum(get_char(lexer))) {
-    return parse_identifier(lexer);
-  }
-  if (get_char(lexer) == '\'') {
-    return parse_char(lexer);
-  }
-  if (get_char(lexer) == '"') {
-    return parse_string(lexer);
-  }
-  return parse_literal(lexer);
-}
-
-#endif  //__LEXER_H_IMP__
+#endif //__LEXER_H_IMP__
