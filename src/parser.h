@@ -9,10 +9,11 @@ typedef enum {
     P_NUMBER,
     P_CHAR,
     P_STRING,
-    P_UNOP,
+    P_ASSIGN,
     P_BINOP,
     P_PLUS,
     P_MINUS,
+    P_IDENTIFIER,
     P_DIV,
     P_MULT,
 } ExprType;
@@ -47,6 +48,7 @@ ExprNode *node_plus(Arena *a, ExprNode *left, ExprNode *right) {
     node->type = P_PLUS;
     node->left = left;
     node->right = right;
+    return node;
 }
 
 ExprNode *node_mult(Arena *a, ExprNode *left, ExprNode *right) {
@@ -54,6 +56,7 @@ ExprNode *node_mult(Arena *a, ExprNode *left, ExprNode *right) {
     node->type = P_MULT;
     node->left = left;
     node->right = right;
+    return node;
 }
 
 ExprNode *node_div(Arena *a, ExprNode *left, ExprNode *right) {
@@ -61,6 +64,7 @@ ExprNode *node_div(Arena *a, ExprNode *left, ExprNode *right) {
     node->type = P_DIV;
     node->left = left;
     node->right = right;
+    return node;
 }
 
 ExprNode *node_minus(Arena *a, ExprNode *right) {
@@ -68,6 +72,7 @@ ExprNode *node_minus(Arena *a, ExprNode *right) {
     node->type = P_MINUS;
     node->left = NULL;
     node->right = right;
+    return node;
 }
 
 ExprNode *node_op(Arena *a, TokenType op, ExprNode *left, ExprNode *right) {
@@ -85,6 +90,22 @@ ExprNode *node_op(Arena *a, TokenType op, ExprNode *left, ExprNode *right) {
     }
 }
 
+ExprNode *node_identifier(Arena *a, const char *value) {
+    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
+    node->type = P_IDENTIFIER;
+    node->string_value = arena_strdup(a, value);
+    printf("====> %s : %d\n", value, strlen(value));
+    return node;
+}
+
+ExprNode *node_assign(Arena *a, ExprNode *left, ExprNode *right) {
+    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
+    node->type = P_ASSIGN;
+    node->left = left;
+    node->right = right;
+    return node;
+}
+
 int get_infix_power(TokenType type) {
     switch (type) {
     case T_MULT:
@@ -93,6 +114,8 @@ int get_infix_power(TokenType type) {
     case T_PLUS:
     case T_MINUS:
         return 50;
+    case T_ASSIGN:
+        return -10;
     default:
         return 0;
     }
@@ -116,6 +139,8 @@ ExprNode *_parse_unop(Lexer *lexer, Arena *arena) {
             return node_minus(arena, _parser_expression(lexer, arena, 70));
         }
         break;
+    case T_IDENTIFIER:
+        return node_identifier(arena, lexer->token.identifier_value);
     default:
         LEXER_ERROR_PRINT(lexer, "Unexpected unop type: %d\n",
                           lexer->token.type);
@@ -148,9 +173,24 @@ ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
             ExprNode *right = _parser_expression(lexer, arena, op_power);
             if (!right) {
                 LEXER_ERROR_PRINT(lexer, "Unexpected token after %c\n", op);
-                assert(0 && "Unexpected token after operation");
+                exit(1);
             }
             left = node_op(arena, op, left, right);
+        } break;
+        case T_ASSIGN: {
+            if (left->type != P_IDENTIFIER) {
+                LEXER_ERROR_PRINT(
+                    lexer, "Token left than assign must be a identifier: %d\n",
+                    left->type);
+                exit(1);
+            }
+            ExprNode *right =
+                _parser_expression(lexer, arena, get_infix_power(T_ASSIGN));
+            if (!right) {
+                LEXER_ERROR_PRINT(lexer, "Unexpected token to assign\n");
+                exit(1);
+            }
+            return node_assign(arena, left, right);
         } break;
         case T_NEW_LINE:
             goto rewind;
@@ -186,6 +226,8 @@ ExprNode *parser_eval_expr(ExprNode *expr, Arena *a) {
     switch (expr->type) {
     case P_NUMBER:
         return expr;
+    case P_IDENTIFIER:
+        return expr;
     case P_PLUS:
     case P_DIV:
     case P_MULT: {
@@ -216,12 +258,28 @@ void _print_expression(ExprNode *expr, int depth) {
     case P_NUMBER:
         printf("NUMBER(%lf)\n", expr->number_value);
         break;
+    case P_IDENTIFIER:
+        printf("ID(%s)\n", expr->string_value);
+        break;
+    case P_ASSIGN:
+        printf("ASSIGN(\n");
+        for (size_t i = 0; i < depth; i++)
+            printf("  ");
+        _print_expression(expr->left, depth + 1);
+        for (size_t i = 0; i < depth + 1; i++)
+            printf("  ");
+        printf(",\n");
+        _print_expression(expr->right, depth + 1);
+        for (size_t i = 0; i < depth; i++)
+            printf("  ");
+        printf(")\n");
+        break;
     case P_PLUS:
         printf("SUM(\n");
         for (size_t i = 0; i < depth; i++)
             printf("  ");
         _print_expression(expr->left, depth + 1);
-        for (size_t i = 0; i < depth+1; i++)
+        for (size_t i = 0; i < depth + 1; i++)
             printf("  ");
         printf(",\n");
         for (size_t i = 0; i < depth; i++)
@@ -236,7 +294,7 @@ void _print_expression(ExprNode *expr, int depth) {
         for (size_t i = 0; i < depth; i++)
             printf("  ");
         _print_expression(expr->left, depth + 1);
-        for (size_t i = 0; i < depth+1; i++)
+        for (size_t i = 0; i < depth + 1; i++)
             printf("  ");
         printf(",\n");
         for (size_t i = 0; i < depth; i++)
@@ -260,7 +318,7 @@ void _print_expression(ExprNode *expr, int depth) {
         for (size_t i = 0; i < depth; i++)
             printf("  ");
         _print_expression(expr->left, depth + 1);
-        for (size_t i = 0; i < depth+1; i++)
+        for (size_t i = 0; i < depth + 1; i++)
             printf("  ");
         printf(",\n");
         _print_expression(expr->right, depth + 1);

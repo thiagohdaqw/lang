@@ -24,6 +24,10 @@ typedef enum token_t {
     T_CPAREN,
     T_OBRACKET,
     T_CBRACKET,
+    T_ASSIGN,
+    T_EQUAL,
+    T_LESS,
+    T_LEQUAL,
 } TokenType;
 
 typedef struct token {
@@ -140,6 +144,13 @@ char next_char(Lexer *lexer) {
     return is_eof(lexer) ? 0 : get_char(lexer);
 }
 
+char peek_next(Lexer *lexer) {
+    Reader r = lexer_save_reader(lexer);
+    char next = next_char(lexer);
+    lexer_rewind_reader(lexer, r);
+    return next;
+}
+
 bool skip_space(Lexer *lexer) {
     while (!is_eof(lexer) && isspace(get_char(lexer))) {
         if (get_char(lexer) == '\n') {
@@ -176,6 +187,7 @@ bool parse_char(Lexer *lexer) {
 bool parse_string(Lexer *lexer) {
     lexer->token.type = T_STRING;
     lexer->token.identifier_size = 0;
+
     while (1) {
         next_char(lexer);
         if (is_eof(lexer)) {
@@ -227,6 +239,20 @@ bool parse_literal(Lexer *lexer) {
     case ')':
         lexer->token.type = T_CPAREN;
         break;
+    case '=': {
+        lexer->token.type = T_ASSIGN;
+        if (peek_next(lexer) == '=') {
+            lexer->token.type = T_EQUAL;
+            next_char(lexer);
+        }
+    } break;
+    case '<': {
+        lexer->token.type = T_LESS;
+        if (peek_next(lexer) == '=') {
+            lexer->token.type = T_LEQUAL;
+            next_char(lexer);
+        }
+    } break;
     default:
         lexer->token.type = T_LITERAL;
         break;

@@ -15,6 +15,7 @@ typedef struct {
 
 Arena arena_create(long capacity);
 void *arena_alloc(Arena *a, long size);
+char *arena_strdup(Arena *a, const char *str);
 void arena_destroy(Arena *a);
 ArenaNode arena_save(Arena *a);
 void arena_rewind(Arena *a, ArenaNode n);
@@ -82,6 +83,13 @@ void *arena_alloc(Arena *a, long size) {
     a->current->offset += size;
 
     return buffer;
+}
+
+char *arena_strdup(Arena *a, const char *str) {
+    int strSize = strlen(str);
+    char *out = arena_alloc(a, strSize);
+    memcpy(out, str, strSize);
+    return out;
 }
 
 #endif
