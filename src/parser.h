@@ -1,7 +1,7 @@
 #ifndef __PARSER_H_INCLUDED__
 #define __PARSER_H_INCLUDED__
 
-#include "arena.h"
+#include "utils/arena.h"
 #include "lexer.h"
 
 typedef enum {
@@ -32,9 +32,15 @@ ExprNode *parser_expression(Lexer *lexer, Arena *arena);
 void parser_print_expression(ExprNode *expr);
 ExprNode *parser_eval_expr(ExprNode *expr, Arena *a);
 
+ExprNode *node_number(Arena *a, double value);
+ExprNode *node_minus(Arena *a, ExprNode *right);
+ExprNode *node_op(Arena *a, TokenType op, ExprNode *left, ExprNode *right);
+ExprNode *node_identifier(Arena *a, const char *value);
+
 #endif // __PARSER_H_INCLUDED__
 
 #ifndef __PARSER_H_IMP__
+#define __PARSER_H_IMP__
 
 ExprNode *node_number(Arena *a, double value) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
@@ -47,6 +53,14 @@ ExprNode *node_plus(Arena *a, ExprNode *left, ExprNode *right) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->type = P_PLUS;
     node->left = left;
+    node->right = right;
+    return node;
+}
+
+ExprNode *node_minus(Arena *a, ExprNode *right) {
+    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
+    node->type = P_MINUS;
+    node->left = NULL;
     node->right = right;
     return node;
 }
@@ -67,10 +81,17 @@ ExprNode *node_div(Arena *a, ExprNode *left, ExprNode *right) {
     return node;
 }
 
-ExprNode *node_minus(Arena *a, ExprNode *right) {
+ExprNode *node_identifier(Arena *a, const char *value) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
-    node->type = P_MINUS;
-    node->left = NULL;
+    node->type = P_IDENTIFIER;
+    node->string_value = arena_strdup(a, value);
+    return node;
+}
+
+ExprNode *node_assign(Arena *a, ExprNode *left, ExprNode *right) {
+    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
+    node->type = P_ASSIGN;
+    node->left = left;
     node->right = right;
     return node;
 }
@@ -85,24 +106,11 @@ ExprNode *node_op(Arena *a, TokenType op, ExprNode *left, ExprNode *right) {
         return node_mult(a, left, right);
     case T_DIV:
         return node_div(a, left, right);
+    case T_ASSIGN:
+        return node_assign(a, left, right);
     default:
         assert(0 && "Unexpected op node type");
     }
-}
-
-ExprNode *node_identifier(Arena *a, const char *value) {
-    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
-    node->type = P_IDENTIFIER;
-    node->string_value = arena_strdup(a, value);
-    return node;
-}
-
-ExprNode *node_assign(Arena *a, ExprNode *left, ExprNode *right) {
-    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
-    node->type = P_ASSIGN;
-    node->left = left;
-    node->right = right;
-    return node;
 }
 
 int get_infix_power(TokenType type) {
@@ -206,53 +214,6 @@ rewind:
 
 ExprNode *parser_expression(Lexer *lexer, Arena *arena) {
     _parser_expression(lexer, arena, 0);
-}
-
-double eval_number(ExprType op, double a, double b) {
-    switch (op) {
-    case P_PLUS:
-        return a + b;
-    case P_MULT:
-        return a * b;
-    case P_DIV:
-        return a / b;
-    default:
-        assert(0 && "Unexpected op type");
-    }
-}
-
-ExprNode *parser_eval_expr(ExprNode *expr, Arena *a) {
-    switch (expr->type) {
-    case P_NUMBER:
-        return expr;
-    case P_IDENTIFIER:
-        return expr;
-    case P_ASSIGN: {
-        ExprNode *left = parser_eval_expr(expr->left, a);
-        ExprNode *right = parser_eval_expr(expr->right, a);
-        return node_assign(a, left, right);
-    }
-    case P_PLUS:
-    case P_DIV:
-    case P_MULT: {
-        ExprNode *left = parser_eval_expr(expr->left, a);
-        assert(left && "Unexpected left null");
-        assert(left->type == P_NUMBER && "Left is not a number");
-        ExprNode *right = parser_eval_expr(expr->right, a);
-        assert(right && "Unexpected right null");
-        assert(right->type == P_NUMBER && "Right is not a number");
-        double result =
-            eval_number(expr->type, left->number_value, right->number_value);
-        return node_number(a, result);
-    }
-    case P_MINUS: {
-        ExprNode *result = parser_eval_expr(expr->right, a);
-        assert(result && "Unexpected minus result null");
-        assert(result->type == P_NUMBER && "Minus result is not a number");
-        return node_number(a, (-1) * result->number_value);
-    }
-    }
-    return NULL;
 }
 
 void _print_expression(ExprNode *expr, int depth) {

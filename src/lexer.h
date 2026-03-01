@@ -64,7 +64,7 @@ typedef struct lexer {
     fprintf(stderr, "[ERROR]: %s:%d:%d => " fmt, l->path, l->reader.row + 1,   \
             l->reader.col, ##__VA_ARGS__)
 
-bool lexer_create(Lexer *lexer, const char *path);
+bool lexer_init(Lexer *lexer, const char *path);
 void lexer_close(Lexer *lexer);
 Reader lexer_save_reader(Lexer *lexer);
 void lexer_rewind_reader(Lexer *lexer, Reader reader);
@@ -111,7 +111,7 @@ char *read_file(const char *filename, long *size) {
     return buffer;
 }
 
-bool lexer_create(Lexer *lexer, const char *path) {
+bool lexer_init(Lexer *lexer, const char *path) {
     memset(lexer, 0, sizeof(*lexer));
 
     lexer->path = path;

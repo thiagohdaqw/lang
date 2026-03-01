@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "arena.h"
+#include "utils/arena.h"
 #include "lexer.h"
 #include "parser.h"
+#include "interpreter.h"
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -13,7 +14,7 @@ int main(int argc, char **argv) {
     }
 
     Lexer lexer = {0};
-    if (!lexer_create(&lexer, argv[1])) {
+    if (!lexer_init(&lexer, argv[1])) {
         return 1;
     }
 
@@ -28,7 +29,7 @@ int main(int argc, char **argv) {
         }
         parser_print_expression(expr);
 
-        ExprNode *result = parser_eval_expr(expr, &arena);
+        ExprNode *result = interpreter_eval(expr, &arena);
         assert(result && "Unexpected result null");
 
         printf("Result:\n");

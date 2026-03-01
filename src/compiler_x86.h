@@ -1,0 +1,4 @@
+#ifndef __COMPILER_X86_H_INCLUDED__
+#define __COMPILER_X86_H_INCLUDED__
+
+#endif // __COMPILER_X86_H_INCLUDED__
