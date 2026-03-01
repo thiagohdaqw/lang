@@ -69,8 +69,7 @@ void arena_destroy(Arena *a) {
 }
 
 void *arena_alloc(Arena *a, long size) {
-    assert(size < a->current->capacity &&
-           "Size to allocate cant be greater than arena capacity");
+    assert(size < a->current->capacity && "Size to allocate cant be greater than arena capacity");
 
     if (a->current->offset + size > a->current->capacity) {
         struct arena_t *n = new_arena(a->current->capacity);
@@ -87,8 +86,9 @@ void *arena_alloc(Arena *a, long size) {
 
 char *arena_strdup(Arena *a, const char *str) {
     int strSize = strlen(str);
-    char *out = arena_alloc(a, strSize);
+    char *out = arena_alloc(a, strSize + 1);
     memcpy(out, str, strSize);
+    out[strSize] = '\0';
     return out;
 }
 

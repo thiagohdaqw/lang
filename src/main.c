@@ -27,13 +27,15 @@ int main(int argc, char **argv) {
                 break;
             continue;
         }
+
+        printf("\n====================================\n");
         parser_print_expression(expr);
 
-        ExprNode *result = interpreter_eval(expr, &arena);
-        assert(result && "Unexpected result null");
-
         printf("Result:\n");
+        ExprNode *result = interpreter_eval(expr, &arena);
+        if (!result) continue;
         parser_print_expression(result);
+
     }
 
     arena_destroy(&arena);
