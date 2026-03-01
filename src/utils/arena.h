@@ -17,6 +17,7 @@ Arena arena_create(long capacity);
 void *arena_alloc(Arena *a, long size);
 char *arena_strdup(Arena *a, const char *str);
 void arena_destroy(Arena *a);
+void *arena_copy(Arena *a, const void *item, long size);
 ArenaNode arena_save(Arena *a);
 void arena_rewind(Arena *a, ArenaNode n);
 
@@ -81,13 +82,20 @@ void *arena_alloc(Arena *a, long size) {
 
     a->current->offset += size;
 
+    memset(buffer, 0, size);
+
+    return buffer;
+}
+
+void *arena_copy(Arena *a, const void *item, long size) {
+    void *buffer = arena_alloc(a, size);
+    memcpy(buffer, item, size);
     return buffer;
 }
 
 char *arena_strdup(Arena *a, const char *str) {
     int strSize = strlen(str);
-    char *out = arena_alloc(a, strSize + 1);
-    memcpy(out, str, strSize);
+    char *out = (char *)arena_copy(a, str, strSize + 1);
     out[strSize] = '\0';
     return out;
 }

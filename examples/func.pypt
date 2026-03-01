@@ -1,11 +1,27 @@
-func main():
-    print(1)
-    print(2)
-    print(3)
+func soma(c, d):
+    c + d
 fim
 
-func count(arg_1, arg_2):
-    print(1)
-    print(2)
-    print(3)
+func multiplicacao(aa, bb):
+    aa * bb
 fim
+
+func div(a, b):
+    func inner_div(c, d):
+        c / d
+    fim
+
+    inner_div(a, b)
+fim
+
+resultado = soma(32, 10)
+print("Soma 32 + 10 = ")
+print(resultado)
+
+resultado = multiplicacao(32, 10)
+print("Multiplicacao 32 * 10 = ")
+print(resultado)
+
+resultado = div(32, 10)
+print("Divisao 32 / 10 = ")
+print(resultado)

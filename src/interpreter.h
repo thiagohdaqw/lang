@@ -7,10 +7,10 @@
 typedef struct {
     const char *key;
     ExprNode *value;
-} IVar;
+} IVarMap;
 
 typedef struct {
-    IVar *vars;
+    IVarMap *vars;
     ExprNode **items;
     int count;
     int capacity;
@@ -23,9 +23,10 @@ typedef struct {
     int capacity;
 
     Arena *allocator;
+    Arena *temp_allocator;
 } Interpreter;
 
-Interpreter interpreter_create(Arena *a);
+Interpreter interpreter_create(Arena *a, Arena *temp_a);
 void interpreter_append(Interpreter *i, ExprNode *node);
 void interpreter_eval(Interpreter *interpreter);
 
@@ -34,10 +35,18 @@ void interpreter_eval(Interpreter *interpreter);
 #ifndef __INTERPRETER_H_IMP__
 #define __INTERPRETER_H_IMP__
 
-Interpreter interpreter_create(Arena *a) {
+#include "utils/stb_ds.h"
+
+Interpreter interpreter_create(Arena *a, Arena *temp_a) {
     Interpreter i = {0};
     i.allocator = a;
+    i.temp_allocator = temp_a;
     return i;
+}
+
+IScope *scope_create(Arena *a) {
+    IScope *s = (IScope *)arena_alloc(a, sizeof(*s));
+    return s;
 }
 
 void interpreter_append(Interpreter *i, ExprNode *node) { da_append(&i->main, node); }
@@ -57,6 +66,19 @@ double eval_number(ExprType op, double a, double b) {
 
 ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a);
 
+void _assign_expr(IScope *scope, char *var, ExprNode *right) { shput(scope->vars, var, right); }
+ExprNode *_invoke_func(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
+    assert(expr->type == P_FUNC);
+
+    ExprNode *ret = NULL;
+
+    for (size_t i = 0; i < expr->count; i++) {
+        ret = _eval(interpreter, scope, expr->items[i], a);
+    }
+
+    return ret;
+}
+
 ExprNode *_eval_funcall(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     for (size_t i = 0; i < expr->count; i++) {
         expr->args.items[i] = _eval(interpreter, scope, expr->args.items[i], a);
@@ -64,35 +86,70 @@ ExprNode *_eval_funcall(Interpreter *interpreter, IScope *scope, ExprNode *expr,
 
     if (strcmp(expr->string_value, "print") == 0) {
         assert(expr->args.count == 1);
-        switch (expr->args.items[0]->type) {
+        ExprNode *value = expr->args.items[0];
+        if (value->type == P_IDENTIFIER) {
+            value = _eval(interpreter, scope, value, a);
+        }
+        switch (value->type) {
         case P_STRING:
-            printf("%s", expr->args.items[0]->string_value);
+            printf("%s", value->string_value);
             break;
         case P_NUMBER:
-            printf("%lf\n", expr->args.items[0]->number_value);
+            printf("%lf\n", value->number_value);
             break;
+        default:
+            printf("Print not implemented for type: %d\n", value->type);
+            exit(1);
         }
+        fflush(stdout);
         return NULL;
     }
-    fprintf(stderr, "Function call '%s' not implemented: %d\n", expr->string_value, strlen(expr->string_value));
-    assert(0 && "Func not implemented");
+
+    ExprNode *func = shget(scope->vars, expr->string_value);
+    if (!func) func = shget(interpreter->main.vars, expr->string_value);
+
+    if (!func) {
+        fprintf(stderr, "Function '%s' not found\n", expr->string_value);
+        exit(1);
+    }
+
+    ArenaNode temp_arena_start = arena_save(interpreter->temp_allocator);
+
+    IScope *new_scope = scope_create(interpreter->temp_allocator);
+
+    assert(func->args.count == expr->args.count);
+    for (size_t i = 0; i < expr->args.count; i++) {
+        ExprNode *value = _eval(interpreter, scope, expr->args.items[i], interpreter->temp_allocator);
+        _assign_expr(new_scope, func->args.items[i]->string_value, value);
+    }
+
+    ExprNode *ret = _invoke_func(interpreter, new_scope, func, interpreter->temp_allocator);
+
+    if (ret) {
+        ret = (ExprNode *)arena_copy(a, ret, sizeof(*ret));
+    }
+    arena_rewind(interpreter->temp_allocator, temp_arena_start);
+    return ret;
 }
 
 ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     switch (expr->type) {
     case P_IDENTIFIER: {
-        ExprNode *id = hmget(scope->vars, expr->string_value);
-        assert(id && "Identifier not found");
+        ExprNode *id = shget(scope->vars, expr->string_value);
+        if (!id) id = shget(interpreter->main.vars, expr->string_value);
+        if (!id) {
+            fprintf(stderr, "Identifier '%s' not found\n", expr->string_value);
+            exit(1);
+        }
         ExprNode *value = _eval(interpreter, scope, id, a);
-        return value;
+        return id;
     }
     case P_NUMBER:
     case P_STRING:
         return expr;
     case P_ASSIGN: {
         ExprNode *right = _eval(interpreter, scope, expr->right, a);
-
-        hmput(scope->vars, expr->left->string_value, right);
+        _assign_expr(scope, expr->left->string_value, right);
         return right;
     }
     case P_FUN_CALL:
@@ -115,8 +172,14 @@ ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *
         assert(result->type == P_NUMBER && "Minus result is not a number");
         return node_number(a, (-1) * result->number_value);
     }
-    case P_FUNC:
-        return NULL;
+    case P_FUNC: {
+        if (shget(scope->vars, expr->string_value)) {
+            fprintf(stderr, "Function '%s' already defined", expr->string_value);
+            exit(1);
+        }
+        shput(scope->vars, expr->string_value, expr);
+        return expr;
+    }
     default:
         assert(0 && "Type not implemented");
     }

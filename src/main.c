@@ -1,12 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "interpreter.h"
+#include "lexer.h"
+#include "parser.h"
 #include "utils/arena.h"
 #define STB_DS_IMPLEMENTATION
 #include "utils/stb_ds.h"
-#include "lexer.h"
-#include "parser.h"
-#include "interpreter.h"
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -21,17 +21,16 @@ int main(int argc, char **argv) {
     }
 
     Arena arena = arena_create(4 * 1024);
+    Arena temp_arena = arena_create(4 * 1024);
 
-    Interpreter interpreter = interpreter_create(&arena);
+    Interpreter interpreter = interpreter_create(&arena, &temp_arena);
 
     while (1) {
         ExprNode *expr = parser_expression(&lexer, &arena);
         if (expr == NULL) {
-            if (lexer_is_eof(&lexer))
-                break;
+            if (lexer_is_eof(&lexer)) break;
             continue;
         }
-
         interpreter_append(&interpreter, expr);
     }
 

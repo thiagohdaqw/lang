@@ -203,6 +203,11 @@ ExprNode *_parse_unop(Lexer *lexer, Arena *arena) {
             ExprNode *arg = _parser_expression(lexer, arena, 0);
             if (arg == NULL) break;
             da_append(&funcall->args, arg);
+
+            if (lexer_peek_next_char(lexer) != ',') {
+                break;
+            }
+            lexer_expect_literal(lexer, ',');
         }
         lexer_expect_token(lexer, T_CPAREN);
         return funcall;
@@ -232,6 +237,7 @@ ExprNode *_parse_unop(Lexer *lexer, Arena *arena) {
             lexer_rewind_reader(lexer, r);
 
             ExprNode *body = _parser_expression(lexer, arena, 0);
+            if (!body) continue;
             da_append(func, body);
 
             continue;
@@ -287,12 +293,13 @@ ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
             }
             return node_assign(arena, left, right);
         } break;
-        case T_NEW_LINE:
-        case T_CPAREN:
-            goto rewind;
         default:
-            LEXER_ERROR_PRINT(lexer, "Unexpected token: %d\n", lexer->token.type);
-            assert(0 && "unexpected token");
+            // case T_NEW_LINE:
+            // case T_CPAREN:
+            // case T_LITERAL:
+            goto rewind;
+            // LEXER_ERROR_PRINT(lexer, "Unexpected token: %d => %c\n", lexer->token.type, lexer->token.literal_value);
+            // assert(0 && "unexpected token");
         }
     }
 rewind:
@@ -332,7 +339,7 @@ void _print_expression(ExprNode *expr, int depth) {
         printf("ASSIGN(\n");
         _print_expression(expr->left, depth + 1);
         printf("\n");
-        print_ws(depth+1);
+        print_ws(depth + 1);
         printf(",\n");
         _print_expression(expr->right, depth + 1);
         print_ws(depth);
@@ -342,7 +349,7 @@ void _print_expression(ExprNode *expr, int depth) {
         printf("SUM(\n");
         _print_expression(expr->left, depth + 1);
         printf("\n");
-        print_ws(depth+1);
+        print_ws(depth + 1);
         printf(",\n");
         _print_expression(expr->right, depth + 1);
         printf(")");
@@ -351,7 +358,7 @@ void _print_expression(ExprNode *expr, int depth) {
         printf("MULT(\n");
         _print_expression(expr->left, depth + 1);
         printf("\n");
-        print_ws(depth+1);
+        print_ws(depth + 1);
         printf(",\n");
         _print_expression(expr->right, depth + 1);
         printf(")");
@@ -365,7 +372,7 @@ void _print_expression(ExprNode *expr, int depth) {
         printf("DIV(\n");
         _print_expression(expr->left, depth + 1);
         printf("\n");
-        print_ws(depth+1);
+        print_ws(depth + 1);
         printf(",\n");
         _print_expression(expr->right, depth + 1);
         printf(")");

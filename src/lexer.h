@@ -263,30 +263,24 @@ bool parse_literal(Lexer *lexer) {
 }
 
 bool parse_identifier(Lexer *lexer) {
-    Reader r = lexer_save_reader(lexer);
-
     lexer->token.identifier_size = 0;
     lexer->token.identifier_value[lexer->token.identifier_size++] = get_char(lexer);
 
-    next_char(lexer);
-    if (is_eof(lexer) || !is_identifier_char(get_char(lexer))) {
-        lexer_rewind_reader(lexer, r);
-        return parse_literal(lexer);
-    }
-
     while (1) {
+        Reader r = lexer_save_reader(lexer);
+
+        next_char(lexer);
+        if (is_eof(lexer) || !is_identifier_char(get_char(lexer))) {
+            lexer_rewind_reader(lexer, r);
+            break;
+        }
+
         if (lexer->token.identifier_size + 1 > IDENTIFIER_MAX_LENGTH) {
             fprintf(stderr, "[LEXER]: %s:%d:%d => Unexpected identifier size too large\n", lexer->path,
                     lexer->reader.row, lexer->reader.col);
             return false;
         }
         lexer->token.identifier_value[lexer->token.identifier_size++] = get_char(lexer);
-        r = lexer_save_reader(lexer);
-        next_char(lexer);
-        if (is_eof(lexer) || !is_identifier_char(get_char(lexer))) {
-            lexer_rewind_reader(lexer, r);
-            break;
-        }
     }
 
     lexer->token.type = T_IDENTIFIER;
