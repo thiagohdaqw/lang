@@ -52,6 +52,11 @@ IScope *scope_create(Arena *a, IScope *parent) {
     return s;
 }
 
+void scope_destroy(IScope *scope) {
+    shfree(scope->vars);
+    da_destroy(scope);
+}
+
 void interpreter_append(Interpreter *i, ExprNode *node) { da_append(&i->main, node); }
 
 double eval_number(ExprType op, double a, double b) {
@@ -141,6 +146,8 @@ ExprNode *_eval_funcall(Interpreter *interpreter, IScope *scope, ExprNode *expr,
     if (ret) {
         ret = (ExprNode *)arena_copy(a, ret, sizeof(*ret));
     }
+
+    scope_destroy(new_scope);
     arena_rewind(interpreter->temp_allocator, temp_arena_start);
     return ret;
 }

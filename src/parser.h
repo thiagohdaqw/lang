@@ -23,6 +23,7 @@ typedef enum {
 typedef struct op_node_t ExprNode;
 
 typedef struct func_args_t {
+    // TODO: USE DA IN ARENA
     ExprNode **items;
     int capacity;
     int count;
@@ -39,6 +40,7 @@ typedef struct op_node_t {
 
     FunArgs args;
 
+    // TODO: USE DA IN ARENA
     ExprNode **items;
     int capacity;
     int count;
