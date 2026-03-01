@@ -198,7 +198,7 @@ bool parse_string(Lexer *lexer) {
         if (get_char(lexer) == '"') {
             break;
         }
-        if (lexer->token.string_size + 1 >= STRING_MAX_LENGTH) {
+        if (lexer->token.string_size + 1 > STRING_MAX_LENGTH) {
             LEXER_ERROR_PRINT(
                 lexer, "String size cant be greater than %d characters\n",
                 STRING_MAX_LENGTH - 1);
@@ -275,7 +275,7 @@ bool parse_identifier(Lexer *lexer) {
     }
 
     while (1) {
-        if (lexer->token.identifier_size + 1 >= IDENTIFIER_MAX_LENGTH) {
+        if (lexer->token.identifier_size + 1 > IDENTIFIER_MAX_LENGTH) {
             fprintf(
                 stderr,
                 "[LEXER]: %s:%d:%d => Unexpected identifier size too large\n",

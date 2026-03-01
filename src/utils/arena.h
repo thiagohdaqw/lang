@@ -72,7 +72,7 @@ void *arena_alloc(Arena *a, long size) {
     assert(size < a->current->capacity &&
            "Size to allocate cant be greater than arena capacity");
 
-    if (a->current->offset + size >= a->current->capacity) {
+    if (a->current->offset + size > a->current->capacity) {
         struct arena_t *n = new_arena(a->current->capacity);
         n->next = a->current;
         a->current = n;
