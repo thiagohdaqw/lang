@@ -304,12 +304,11 @@ ExprNode *parser_expression(Lexer *lexer, Arena *arena) { _parser_expression(lex
 
 void print_ws(int depth) {
     for (size_t i = 0; i < depth; i++)
-        printf("        ");
+        printf("  ");
 }
 
 void _print_expression(ExprNode *expr, int depth) {
-    for (size_t i = 0; i < depth; i++)
-        printf("        ");
+    print_ws(depth);
     switch (expr->type) {
     case P_NUMBER:
         printf("NUMBER(%lf)", expr->number_value);
@@ -333,20 +332,17 @@ void _print_expression(ExprNode *expr, int depth) {
         printf("ASSIGN(\n");
         _print_expression(expr->left, depth + 1);
         printf("\n");
-        for (size_t i = 0; i < depth + 1; i++)
-            printf("        ");
+        print_ws(depth+1);
         printf(",\n");
         _print_expression(expr->right, depth + 1);
-        for (size_t i = 0; i < depth; i++)
-            printf("        ");
+        print_ws(depth);
         printf(")\n");
         break;
     case P_PLUS:
         printf("SUM(\n");
         _print_expression(expr->left, depth + 1);
         printf("\n");
-        for (size_t i = 0; i < depth + 1; i++)
-            printf("        ");
+        print_ws(depth+1);
         printf(",\n");
         _print_expression(expr->right, depth + 1);
         printf(")");
@@ -355,8 +351,7 @@ void _print_expression(ExprNode *expr, int depth) {
         printf("MULT(\n");
         _print_expression(expr->left, depth + 1);
         printf("\n");
-        for (size_t i = 0; i < depth + 1; i++)
-            printf("        ");
+        print_ws(depth+1);
         printf(",\n");
         _print_expression(expr->right, depth + 1);
         printf(")");
@@ -370,8 +365,7 @@ void _print_expression(ExprNode *expr, int depth) {
         printf("DIV(\n");
         _print_expression(expr->left, depth + 1);
         printf("\n");
-        for (size_t i = 0; i < depth + 1; i++)
-            printf("        ");
+        print_ws(depth+1);
         printf(",\n");
         _print_expression(expr->right, depth + 1);
         printf(")");
@@ -384,6 +378,7 @@ void _print_expression(ExprNode *expr, int depth) {
     }
 }
 void parser_print_expression(ExprNode *expr) {
+    if (!expr) return;
     _print_expression(expr, 0);
     printf("\n");
 }
