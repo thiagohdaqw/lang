@@ -16,6 +16,14 @@ typedef enum token_t {
     T_IDENTIFIER,
     T_LONG,
     T_DOUBLE,
+    T_PLUS,
+    T_MINUS,
+    T_MULT,
+    T_DIV,
+    T_OPAREN,
+    T_CPAREN,
+    T_OBRACKET,
+    T_CBRACKET,
 } TokenType;
 
 typedef struct token {
@@ -192,8 +200,38 @@ bool parse_string(Lexer *lexer) {
 }
 
 bool parse_literal(Lexer *lexer) {
-    lexer->token.type = T_LITERAL;
     lexer->token.literal_value = get_char(lexer);
+
+    switch (get_char(lexer)) {
+    case '+':
+        lexer->token.type = T_PLUS;
+        break;
+    case '-':
+        lexer->token.type = T_MINUS;
+        break;
+    case '*':
+        lexer->token.type = T_MULT;
+        break;
+    case '/':
+        lexer->token.type = T_DIV;
+        break;
+    case '{':
+        lexer->token.type = T_OBRACKET;
+        break;
+    case '}':
+        lexer->token.type = T_CBRACKET;
+        break;
+    case '(':
+        lexer->token.type = T_OPAREN;
+        break;
+    case ')':
+        lexer->token.type = T_CPAREN;
+        break;
+    default:
+        lexer->token.type = T_LITERAL;
+        break;
+    }
+
     return true;
 }
 

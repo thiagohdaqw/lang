@@ -15,7 +15,9 @@ typedef struct {
 
 Arena arena_create(long capacity);
 void *arena_alloc(Arena *a, long size);
-void arena_destroy();
+void arena_destroy(Arena *a);
+ArenaNode arena_save(Arena *a);
+void arena_rewind(Arena *a, ArenaNode n);
 
 #endif // __ARENA_H_INCLUDED__
 

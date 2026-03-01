@@ -70,28 +70,28 @@ ExprNode *node_minus(Arena *a, ExprNode *right) {
     node->right = right;
 }
 
-ExprNode *node_op(Arena *a, char op, ExprNode *left, ExprNode *right) {
+ExprNode *node_op(Arena *a, TokenType op, ExprNode *left, ExprNode *right) {
     switch (op) {
-    case '+':
+    case T_PLUS:
         return node_plus(a, left, right);
-    case '-':
+    case T_MINUS:
         return node_plus(a, left, node_minus(a, right));
-    case '*':
+    case T_MULT:
         return node_mult(a, left, right);
-    case '/':
+    case T_DIV:
         return node_div(a, left, right);
     default:
         assert(0 && "Unexpected op node type");
     }
 }
 
-int get_infix_power(char op) {
-    switch (op) {
-    case '*':
-    case '/':
+int get_infix_power(TokenType type) {
+    switch (type) {
+    case T_MULT:
+    case T_DIV:
         return 60;
-    case '+':
-    case '-':
+    case T_PLUS:
+    case T_MINUS:
         return 50;
     default:
         return 0;
@@ -136,29 +136,21 @@ ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
             return left;
 
         switch (lexer->token.type) {
-        case T_LITERAL: {
-            switch (lexer->token.literal_value) {
-            case '+':
-            case '-':
-            case '*':
-            case '/':
-                char op = lexer->token.literal_value;
-                int op_power = get_infix_power(op);
+        case T_PLUS:
+        case T_MINUS:
+        case T_MULT:
+        case T_DIV: {
+            char op = lexer->token.type;
+            int op_power = get_infix_power(op);
 
-                if (op_power <= power)
-                    goto rewind;
-                ExprNode *right = _parser_expression(lexer, arena, op_power);
-                if (!right) {
-                    LEXER_ERROR_PRINT(lexer, "Unexpected token after %c\n", op);
-                    assert(0 && "Unexpected token after operation");
-                }
-                left = node_op(arena, op, left, right);
-                break;
-            case T_NEW_LINE:
-                return left;
-            default:
-                assert(0 && "unexpected literal");
+            if (op_power <= power)
+                goto rewind;
+            ExprNode *right = _parser_expression(lexer, arena, op_power);
+            if (!right) {
+                LEXER_ERROR_PRINT(lexer, "Unexpected token after %c\n", op);
+                assert(0 && "Unexpected token after operation");
             }
+            left = node_op(arena, op, left, right);
         } break;
         case T_NEW_LINE:
             goto rewind;
@@ -229,7 +221,7 @@ void _print_expression(ExprNode *expr, int depth) {
         for (size_t i = 0; i < depth; i++)
             printf("  ");
         _print_expression(expr->left, depth + 1);
-        for (size_t i = 0; i < depth; i++)
+        for (size_t i = 0; i < depth+1; i++)
             printf("  ");
         printf(",\n");
         for (size_t i = 0; i < depth; i++)
@@ -244,9 +236,11 @@ void _print_expression(ExprNode *expr, int depth) {
         for (size_t i = 0; i < depth; i++)
             printf("  ");
         _print_expression(expr->left, depth + 1);
-        for (size_t i = 0; i < depth; i++)
+        for (size_t i = 0; i < depth+1; i++)
             printf("  ");
         printf(",\n");
+        for (size_t i = 0; i < depth; i++)
+            printf("  ");
         _print_expression(expr->right, depth + 1);
         for (size_t i = 0; i < depth; i++)
             printf("  ");
@@ -266,7 +260,7 @@ void _print_expression(ExprNode *expr, int depth) {
         for (size_t i = 0; i < depth; i++)
             printf("  ");
         _print_expression(expr->left, depth + 1);
-        for (size_t i = 0; i < depth; i++)
+        for (size_t i = 0; i < depth+1; i++)
             printf("  ");
         printf(",\n");
         _print_expression(expr->right, depth + 1);
