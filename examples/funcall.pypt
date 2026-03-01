@@ -1,3 +1,5 @@
 print("Hello world\n")
 print("Ola mundo\n")
 print("Hello world\n")
+print("\n")
+print(1*2*3*4+5)

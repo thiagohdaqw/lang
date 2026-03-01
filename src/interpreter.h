@@ -28,14 +28,19 @@ ExprNode *_eval(ExprNode *expr, Arena *a);
 
 ExprNode *_eval_funcall(ExprNode *expr, Arena *a) {
     for (size_t i = 0; i < expr->count; i++) {
-        expr->items[i] = _eval(expr->items[i], a);
+        expr->args.items[i] = _eval(expr->args.items[i], a);
     }
 
     if (strcmp(expr->string_value, "print") == 0) {
-        const char *x = "hello world\n";
-        assert(expr->count == 1 && expr->items[0]->type == P_STRING && "Usage: print(\"<string>\")");
-        printf("%s", expr->items[0]->string_value);
-        fflush(stdout);
+        assert(expr->args.count == 1);
+        switch (expr->args.items[0]->type) {
+        case P_STRING:
+            printf("%s", expr->args.items[0]->string_value);
+            break;
+        case P_NUMBER:
+            printf("%lf\n", expr->args.items[0]->number_value);
+            break;
+        }
         return NULL;
     }
     fprintf(stderr, "Function call '%s' not implemented: %d\n", expr->string_value, strlen(expr->string_value));
@@ -53,7 +58,7 @@ ExprNode *_eval(ExprNode *expr, Arena *a) {
         ExprNode *right = interpreter_eval(expr->right, a);
         return node_op(a, T_ASSIGN, left, right);
     }
-    case P_FUNCALL:
+    case P_FUN_CALL:
         return _eval_funcall(expr, a);
     case P_PLUS:
     case P_DIV:
@@ -73,6 +78,8 @@ ExprNode *_eval(ExprNode *expr, Arena *a) {
         assert(result->type == P_NUMBER && "Minus result is not a number");
         return node_number(a, (-1) * result->number_value);
     }
+    case P_FUNC:
+        return NULL;
     default:
         assert(0 && "Type not implemented");
     }

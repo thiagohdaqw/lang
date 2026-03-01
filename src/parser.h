@@ -16,8 +16,17 @@ typedef enum {
     P_IDENTIFIER,
     P_DIV,
     P_MULT,
-    P_FUNCALL,
+    P_FUNC,
+    P_FUN_CALL,
 } ExprType;
+
+typedef struct op_node_t ExprNode;
+
+typedef struct func_args_t {
+    ExprNode **items;
+    int capacity;
+    int count;
+} FunArgs;
 
 typedef struct op_node_t {
     ExprType type;
@@ -25,10 +34,12 @@ typedef struct op_node_t {
     double number_value;
     char char_value;
     char *string_value;
-    struct op_node_t *left;
-    struct op_node_t *right;
+    ExprNode *left;
+    ExprNode *right;
 
-    struct op_node_t **items;
+    FunArgs args;
+
+    ExprNode **items;
     int capacity;
     int count;
 } ExprNode;
@@ -113,10 +124,20 @@ ExprNode *node_string(Arena *a, const char *value) {
 ExprNode *node_funcall(Arena *a, const char *identifier) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->string_value = arena_strdup(a, identifier);
-    node->capacity = 0;
+    node->args.items = NULL;
+    node->args.capacity = 0;
+    node->args.count = 0;
+    node->type = P_FUN_CALL;
+    return node;
+}
+
+ExprNode *node_func(Arena *a, const char *identifier) {
+    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
+    node->string_value = arena_strdup(a, identifier);
     node->items = NULL;
+    node->capacity = 0;
     node->count = 0;
-    node->type = P_FUNCALL;
+    node->type = P_FUNC;
     return node;
 }
 
@@ -181,14 +202,50 @@ ExprNode *_parse_unop(Lexer *lexer, Arena *arena) {
         while (lexer_peek_next_char(lexer) != ')') {
             ExprNode *arg = _parser_expression(lexer, arena, 0);
             if (arg == NULL) break;
-            da_append(funcall, arg);
+            da_append(&funcall->args, arg);
         }
         lexer_expect_token(lexer, T_CPAREN);
         return funcall;
     }
+    case T_FUNC: {
+        lexer_expect_token(lexer, T_IDENTIFIER);
+        ExprNode *func = node_func(arena, lexer->token.identifier_value);
+        lexer_expect_token(lexer, T_OPAREN);
+
+        while (lexer_peek_next_char(lexer) != ')') {
+            lexer_expect_token(lexer, T_IDENTIFIER);
+            ExprNode *arg = node_identifier(arena, lexer->token.identifier_value);
+            da_append(&func->args, arg);
+
+            if (lexer_peek_next_char(lexer) != ',') {
+                break;
+            }
+            lexer_expect_literal(lexer, ',');
+        }
+        lexer_expect_token(lexer, T_CPAREN);
+        lexer_expect_literal(lexer, ':');
+
+        while (1) {
+            Reader r = lexer_save_reader(lexer);
+            if (!lexer_next_token(lexer)) goto end_func_body;
+            if (lexer->token.type == T_END) goto end_func_body;
+            lexer_rewind_reader(lexer, r);
+
+            ExprNode *body = _parser_expression(lexer, arena, 0);
+            da_append(func, body);
+
+            continue;
+        end_func_body:
+            lexer_rewind_reader(lexer, r);
+            break;
+        }
+
+        lexer_expect_token(lexer, T_END);
+        return func;
+    } break;
     default:
         LEXER_ERROR_PRINT(lexer, "Unexpected unop type: %d\n", lexer->token.type);
-        exit(1);
+        assert(0 && "Unexpected unop");
     }
 }
 
@@ -260,7 +317,7 @@ void _print_expression(ExprNode *expr, int depth) {
     case P_IDENTIFIER:
         printf("ID(%s)", expr->string_value);
         break;
-    case P_FUNCALL:
+    case P_FUN_CALL:
         printf("FUNCALL(%s,\n", expr->string_value);
         for (size_t i = 0; i < expr->count; i++) {
             print_ws(depth);
@@ -318,6 +375,9 @@ void _print_expression(ExprNode *expr, int depth) {
         printf(",\n");
         _print_expression(expr->right, depth + 1);
         printf(")");
+        break;
+    case P_FUNC:
+        printf("FUNC(%s, args = %d, body = %d)\n", expr->string_value, expr->args.count, expr->count);
         break;
     default:
         assert(0 && "Not implemented expr type");

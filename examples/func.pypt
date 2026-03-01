@@ -1,0 +1,11 @@
+func main():
+    print(1)
+    print(2)
+    print(3)
+fim
+
+func count(arg_1, arg_2):
+    print(1)
+    print(2)
+    print(3)
+fim

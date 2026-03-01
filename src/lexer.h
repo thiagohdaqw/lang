@@ -28,6 +28,8 @@ typedef enum token_t {
     T_EQUAL,
     T_LESS,
     T_LEQUAL,
+    T_END,
+    T_FUNC,
 } TokenType;
 
 typedef struct token {
@@ -70,6 +72,7 @@ void lexer_rewind_reader(Lexer *lexer, Reader reader);
 bool lexer_is_eof(Lexer *lexer);
 bool lexer_next_token(Lexer *lexer);
 void lexer_expect_token(Lexer *lexer, TokenType type);
+void lexer_expect_literal(Lexer *lexer, char value);
 
 #endif // __LEXER_H_INCLUDED__
 
@@ -87,7 +90,7 @@ void lexer_expect_token(Lexer *lexer, TokenType type);
 #define get_char(l) (l->reader.reader[l->reader.position])
 #define is_eof(l)                                                                                                      \
     ((!l->reader.reader || l->reader.position >= l->reader.size || l->reader.position >= 0 && get_char(l) == 0))
-#define is_identifier_char(c) (isalpha(c) || (c) == '_')
+#define is_identifier_char(c) (isalnum(c) || (c) == '_')
 
 #define char_to_int(c) ((c) - '0')
 
@@ -289,6 +292,12 @@ bool parse_identifier(Lexer *lexer) {
     lexer->token.type = T_IDENTIFIER;
     lexer->token.identifier_value[lexer->token.identifier_size] = 0;
 
+    if (strcmp(lexer->token.identifier_value, "func") == 0) {
+        lexer->token.type = T_FUNC;
+    } else if (strcmp(lexer->token.identifier_value, "fim") == 0) {
+        lexer->token.type = T_END;
+    }
+
     return true;
 }
 
@@ -360,6 +369,14 @@ bool lexer_next_token(Lexer *lexer) {
 void lexer_expect_token(Lexer *lexer, TokenType type) {
     if (!lexer_next_token(lexer) || lexer->token.type != type) {
         LEXER_ERROR_PRINT(lexer, "Expected token %d but got token %d\n", type, lexer->token.type);
+        exit(1);
+    }
+}
+
+void lexer_expect_literal(Lexer *lexer, char value) {
+    lexer_expect_token(lexer, T_LITERAL);
+    if (lexer->token.literal_value != value) {
+        LEXER_ERROR_PRINT(lexer, "Expected literal %c but got literal %c\n", value, lexer->token.literal_value);
         exit(1);
     }
 }
