@@ -9,7 +9,9 @@ typedef struct {
     ExprNode *value;
 } IVarMap;
 
-typedef struct {
+typedef struct i_scope {
+    struct i_scope *parent;
+
     IVarMap *vars;
     ExprNode **items;
     int count;
@@ -44,8 +46,9 @@ Interpreter interpreter_create(Arena *a, Arena *temp_a) {
     return i;
 }
 
-IScope *scope_create(Arena *a) {
+IScope *scope_create(Arena *a, IScope *parent) {
     IScope *s = (IScope *)arena_alloc(a, sizeof(*s));
+    s->parent = parent;
     return s;
 }
 
@@ -66,7 +69,19 @@ double eval_number(ExprType op, double a, double b) {
 
 ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a);
 
-void _assign_expr(IScope *scope, char *var, ExprNode *right) { shput(scope->vars, var, right); }
+void _assign_expr(IScope *scope, char *key, ExprNode *right) { shput(scope->vars, key, right); }
+
+ExprNode *_get_var(IScope *scope, char *key) {
+    while (scope) {
+        ExprNode *value = shget(scope->vars, key);
+        if (value) {
+            return value;
+        }
+        scope = scope->parent;
+    }
+    return NULL;
+}
+
 ExprNode *_invoke_func(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     assert(expr->type == P_FUNC);
 
@@ -105,9 +120,7 @@ ExprNode *_eval_funcall(Interpreter *interpreter, IScope *scope, ExprNode *expr,
         return NULL;
     }
 
-    ExprNode *func = shget(scope->vars, expr->string_value);
-    if (!func) func = shget(interpreter->main.vars, expr->string_value);
-
+    ExprNode *func = _get_var(scope, expr->string_value);
     if (!func) {
         fprintf(stderr, "Function '%s' not found\n", expr->string_value);
         exit(1);
@@ -115,7 +128,7 @@ ExprNode *_eval_funcall(Interpreter *interpreter, IScope *scope, ExprNode *expr,
 
     ArenaNode temp_arena_start = arena_save(interpreter->temp_allocator);
 
-    IScope *new_scope = scope_create(interpreter->temp_allocator);
+    IScope *new_scope = scope_create(interpreter->temp_allocator, scope);
 
     assert(func->args.count == expr->args.count);
     for (size_t i = 0; i < expr->args.count; i++) {
@@ -135,8 +148,7 @@ ExprNode *_eval_funcall(Interpreter *interpreter, IScope *scope, ExprNode *expr,
 ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     switch (expr->type) {
     case P_IDENTIFIER: {
-        ExprNode *id = shget(scope->vars, expr->string_value);
-        if (!id) id = shget(interpreter->main.vars, expr->string_value);
+        ExprNode *id = _get_var(scope, expr->string_value);
         if (!id) {
             fprintf(stderr, "Identifier '%s' not found\n", expr->string_value);
             exit(1);
