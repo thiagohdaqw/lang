@@ -94,7 +94,6 @@ ExprNode *node_identifier(Arena *a, const char *value) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->type = P_IDENTIFIER;
     node->string_value = arena_strdup(a, value);
-    printf("====> %s : %d\n", value, strlen(value));
     return node;
 }
 
@@ -228,6 +227,11 @@ ExprNode *parser_eval_expr(ExprNode *expr, Arena *a) {
         return expr;
     case P_IDENTIFIER:
         return expr;
+    case P_ASSIGN: {
+        ExprNode *left = parser_eval_expr(expr->left, a);
+        ExprNode *right = parser_eval_expr(expr->right, a);
+        return node_assign(a, left, right);
+    }
     case P_PLUS:
     case P_DIV:
     case P_MULT: {
@@ -253,78 +257,60 @@ ExprNode *parser_eval_expr(ExprNode *expr, Arena *a) {
 
 void _print_expression(ExprNode *expr, int depth) {
     for (size_t i = 0; i < depth; i++)
-        printf("  ");
+        printf("    ");
     switch (expr->type) {
     case P_NUMBER:
-        printf("NUMBER(%lf)\n", expr->number_value);
+        printf("NUMBER(%lf)", expr->number_value);
         break;
     case P_IDENTIFIER:
-        printf("ID(%s)\n", expr->string_value);
+        printf("ID(%s)", expr->string_value);
         break;
     case P_ASSIGN:
         printf("ASSIGN(\n");
-        for (size_t i = 0; i < depth; i++)
-            printf("  ");
         _print_expression(expr->left, depth + 1);
+        printf("\n");
         for (size_t i = 0; i < depth + 1; i++)
-            printf("  ");
+            printf("    ");
         printf(",\n");
         _print_expression(expr->right, depth + 1);
         for (size_t i = 0; i < depth; i++)
-            printf("  ");
+            printf("    ");
         printf(")\n");
         break;
     case P_PLUS:
         printf("SUM(\n");
-        for (size_t i = 0; i < depth; i++)
-            printf("  ");
         _print_expression(expr->left, depth + 1);
+        printf("\n");
         for (size_t i = 0; i < depth + 1; i++)
-            printf("  ");
+            printf("    ");
         printf(",\n");
-        for (size_t i = 0; i < depth; i++)
-            printf("  ");
         _print_expression(expr->right, depth + 1);
-        for (size_t i = 0; i < depth; i++)
-            printf("  ");
-        printf(")\n");
+        printf(")");
         break;
     case P_MULT:
         printf("MULT(\n");
-        for (size_t i = 0; i < depth; i++)
-            printf("  ");
         _print_expression(expr->left, depth + 1);
+        printf("\n");
         for (size_t i = 0; i < depth + 1; i++)
-            printf("  ");
+            printf("    ");
         printf(",\n");
-        for (size_t i = 0; i < depth; i++)
-            printf("  ");
         _print_expression(expr->right, depth + 1);
-        for (size_t i = 0; i < depth; i++)
-            printf("  ");
-        printf(")\n");
+        printf(")");
         break;
     case P_MINUS:
         printf("MINUS(\n");
-        for (size_t i = 0; i < depth; i++)
-            printf("  ");
         _print_expression(expr->right, depth + 1);
-        for (size_t i = 0; i < depth; i++)
-            printf("  ");
         printf(")");
         break;
     case P_DIV:
         printf("DIV(\n");
-        for (size_t i = 0; i < depth; i++)
-            printf("  ");
         _print_expression(expr->left, depth + 1);
+        printf("\n");
         for (size_t i = 0; i < depth + 1; i++)
-            printf("  ");
+            printf("    ");
         printf(",\n");
         _print_expression(expr->right, depth + 1);
-        for (size_t i = 0; i < depth; i++)
-            printf("  ");
-        printf(")\n");
+        printf(")");
         break;
     default:
         assert(0 && "Not implemented expr type");

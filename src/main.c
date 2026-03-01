@@ -28,9 +28,10 @@ int main(int argc, char **argv) {
         }
         parser_print_expression(expr);
 
-        printf("Result: ");
         ExprNode *result = parser_eval_expr(expr, &arena);
         assert(result && "Unexpected result null");
+
+        printf("Result:\n");
         parser_print_expression(result);
     }
 
