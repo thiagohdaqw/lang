@@ -74,7 +74,13 @@ double eval_number(ExprType op, double a, double b) {
     case P_MULT:
         return a * b;
     case P_DIV:
+        if (b == 0) {
+            fprintf(stderr, "Division by zero\n");
+            exit(1);
+        }
         return a / b;
+    case P_POW:
+        return pow(a, b);
     default:
         assert(0 && "Unexpected op type");
     }
@@ -210,7 +216,8 @@ ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *
         return _eval_if(interpreter, scope, expr, a);
     case P_PLUS:
     case P_DIV:
-    case P_MULT: {
+    case P_MULT:
+    case P_POW: {
         ExprNode *left = _eval(interpreter, scope, expr->first, a);
         assert(left && "Unexpected left null");
         assert(left->type == P_NUMBER && "Left is not a number");

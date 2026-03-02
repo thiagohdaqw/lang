@@ -20,6 +20,7 @@ typedef enum token_t {
     T_MINUS,
     T_MULT,
     T_DIV,
+    T_POW,
     T_OPAREN,
     T_CPAREN,
     T_OBRACKET,
@@ -99,6 +100,8 @@ Token lexer_peek_next_token(Lexer *lexer);
 
 bool lexer_is_eof(Lexer *lexer) { return is_eof(lexer); }
 
+char lexer_peek_next_char(Lexer *lexer);
+
 char *read_file(const char *filename, long *size) {
     FILE *f = fopen(filename, "rb");
     if (!f) return NULL;
@@ -143,13 +146,6 @@ char next_char(Lexer *lexer) {
     lexer->reader.col++;
     lexer->reader.position++;
     return is_eof(lexer) ? 0 : get_char(lexer);
-}
-
-char peek_next(Lexer *lexer) {
-    Reader r = lexer_save_reader(lexer);
-    char next = next_char(lexer);
-    lexer_rewind_reader(lexer, r);
-    return next;
 }
 
 bool skip_space(Lexer *lexer) {
@@ -198,7 +194,7 @@ bool parse_string(Lexer *lexer) {
             break;
         }
         if (value == '\\') {
-            if (peek_next(lexer) == 'n') {
+            if (lexer_peek_next_char(lexer) == 'n') {
                 next_char(lexer);
                 value = '\n';
             }
@@ -227,6 +223,12 @@ bool parse_literal(Lexer *lexer) {
         break;
     case '*':
         lexer->token.type = T_MULT;
+
+        if (lexer_peek_next_char(lexer) == '*') {
+            lexer_next_token(lexer);
+            lexer->token.type = T_POW;
+            break;
+        }
         break;
     case '/':
         lexer->token.type = T_DIV;
@@ -245,14 +247,14 @@ bool parse_literal(Lexer *lexer) {
         break;
     case '=': {
         lexer->token.type = T_ASSIGN;
-        if (peek_next(lexer) == '=') {
+        if (lexer_peek_next_char(lexer) == '=') {
             lexer->token.type = T_EQUAL;
             next_char(lexer);
         }
     } break;
     case '<': {
         lexer->token.type = T_LESS;
-        if (peek_next(lexer) == '=') {
+        if (lexer_peek_next_char(lexer) == '=') {
             lexer->token.type = T_LEQUAL;
             next_char(lexer);
         }

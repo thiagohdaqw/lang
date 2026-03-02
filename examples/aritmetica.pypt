@@ -1,3 +1,6 @@
 resultado = 1-1*1+1/0.5
 
 escreva(resultado, "\n")
+
+resultado = 2**3
+escreva("2 elevado a 3 é igual a ", resultado, "\n")

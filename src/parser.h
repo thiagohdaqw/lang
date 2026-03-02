@@ -16,6 +16,7 @@ typedef enum {
     P_IDENTIFIER,
     P_DIV,
     P_MULT,
+    P_POW,
     P_FUNC,
     P_FUN_CALL,
     P_IF,
@@ -105,6 +106,14 @@ ExprNode *node_div(Arena *a, ExprNode *left, ExprNode *right) {
     return node;
 }
 
+ExprNode *node_pow(Arena *a, ExprNode *left, ExprNode *right) {
+    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
+    node->type = P_POW;
+    node->first = left;
+    node->second = right;
+    return node;
+}
+
 ExprNode *node_identifier(Arena *a, const char *value) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->type = P_IDENTIFIER;
@@ -175,6 +184,8 @@ ExprNode *node_op(Arena *a, TokenType op, ExprNode *left, ExprNode *right) {
         return node_mult(a, left, right);
     case T_DIV:
         return node_div(a, left, right);
+    case T_POW:
+        return node_pow(a, left, right);
     case T_ASSIGN:
         return node_assign(a, left, right);
     default:
@@ -184,6 +195,8 @@ ExprNode *node_op(Arena *a, TokenType op, ExprNode *left, ExprNode *right) {
 
 int get_infix_power(TokenType type) {
     switch (type) {
+    case T_POW:
+        return 70;
     case T_MULT:
     case T_DIV:
         return 60;
@@ -250,7 +263,8 @@ ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
         case T_PLUS:
         case T_MINUS:
         case T_MULT:
-        case T_DIV: {
+        case T_DIV:
+        case T_POW: {
             char op = lexer->token.type;
             int op_power = get_infix_power(op);
 
