@@ -38,11 +38,19 @@ void interpreter_eval(Interpreter *interpreter);
 #define __INTERPRETER_H_IMP__
 
 #include "utils/stb_ds.h"
+#include "math.h"
+
+void _assign_expr(IScope *scope, char *key, ExprNode *right) { shput(scope->vars, key, right); }
 
 Interpreter interpreter_create(Arena *a, Arena *temp_a) {
     Interpreter i = {0};
     i.allocator = a;
     i.temp_allocator = temp_a;
+
+    _assign_expr(&i.main, "verdadeiro", node_number(i.allocator, 1));
+    _assign_expr(&i.main, "falso", node_number(i.allocator, 0));
+    _assign_expr(&i.main, "PI", node_number(i.allocator, M_PI));
+    
     return i;
 }
 
@@ -74,7 +82,9 @@ double eval_number(ExprType op, double a, double b) {
 
 ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a);
 
-void _assign_expr(IScope *scope, char *key, ExprNode *right) { shput(scope->vars, key, right); }
+ExprNode *_eval_identifier(IScope *scope, ExprNode *expr, Interpreter *interpreter, Arena *a);
+
+ExprNode *_eval_assign(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a);
 
 ExprNode *_get_var(IScope *scope, char *key) {
     while (scope) {
@@ -152,41 +162,69 @@ ExprNode *_eval_funcall(Interpreter *interpreter, IScope *scope, ExprNode *expr,
     return ret;
 }
 
+ExprNode *_eval_block(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
+    ExprNode *ret = NULL;
+
+    if (expr->count == 0) return ret;
+
+    ArenaNode saved_arena = arena_save(interpreter->temp_allocator);
+    IScope *new_scope = scope_create(interpreter->temp_allocator, scope);
+
+    for (size_t i = 0; i < expr->count; i++) {
+        ret = _eval(interpreter, new_scope, expr->items[i], interpreter->temp_allocator);
+        // TODO: ADD EARLY RETURN
+    }
+
+    if (ret) {
+        ret = arena_copy(a, ret, sizeof(*ret));
+    }
+
+    scope_destroy(new_scope);
+    arena_rewind(interpreter->temp_allocator, saved_arena);
+
+    return ret;
+}
+
+ExprNode *_eval_if(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
+    ExprNode *cond = _eval(interpreter, scope, expr->first, a);
+    assert(cond && cond->type == P_NUMBER);
+
+    if (cond->number_value) {
+        return _eval_block(interpreter, scope, expr->second, a);
+    }
+    if (expr->third) {
+        return _eval_block(interpreter, scope, expr->third, a);
+    }
+    return NULL;
+}
+
 ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     switch (expr->type) {
-    case P_IDENTIFIER: {
-        ExprNode *id = _get_var(scope, expr->string_value);
-        if (!id) {
-            fprintf(stderr, "Identifier '%s' not found\n", expr->string_value);
-            exit(1);
-        }
-        ExprNode *value = _eval(interpreter, scope, id, a);
-        return id;
-    }
+    case P_IDENTIFIER:
+        return _eval_identifier(scope, expr, interpreter, a);
     case P_NUMBER:
     case P_STRING:
         return expr;
-    case P_ASSIGN: {
-        ExprNode *right = _eval(interpreter, scope, expr->right, a);
-        _assign_expr(scope, expr->left->string_value, right);
-        return right;
-    }
+    case P_ASSIGN:
+        return _eval_assign(interpreter, scope, expr, a);
     case P_FUN_CALL:
         return _eval_funcall(interpreter, scope, expr, a);
+    case P_IF:
+        return _eval_if(interpreter, scope, expr, a);
     case P_PLUS:
     case P_DIV:
     case P_MULT: {
-        ExprNode *left = _eval(interpreter, scope, expr->left, a);
+        ExprNode *left = _eval(interpreter, scope, expr->first, a);
         assert(left && "Unexpected left null");
         assert(left->type == P_NUMBER && "Left is not a number");
-        ExprNode *right = _eval(interpreter, scope, expr->right, a);
+        ExprNode *right = _eval(interpreter, scope, expr->second, a);
         assert(right && "Unexpected right null");
         assert(right->type == P_NUMBER && "Right is not a number");
         double result = eval_number(expr->type, left->number_value, right->number_value);
         return node_number(a, result);
     }
     case P_MINUS: {
-        ExprNode *result = _eval(interpreter, scope, expr->right, a);
+        ExprNode *result = _eval(interpreter, scope, expr->second, a);
         assert(result && "Unexpected minus result null");
         assert(result->type == P_NUMBER && "Minus result is not a number");
         return node_number(a, (-1) * result->number_value);
@@ -200,8 +238,25 @@ ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *
         return expr;
     }
     default:
-        assert(0 && "Type not implemented");
+        fprintf(stderr, "Expr type not implemented: %d\n", expr->type);
+        assert(0 && "Expr type not implemented");
     }
+}
+
+ExprNode *_eval_identifier(IScope *scope, ExprNode *expr, Interpreter *interpreter, Arena *a) {
+    ExprNode *id = _get_var(scope, expr->string_value);
+    if (!id) {
+        fprintf(stderr, "Identifier '%s' not found\n", expr->string_value);
+        exit(1);
+    }
+    ExprNode *value = _eval(interpreter, scope, id, a);
+    return id;
+}
+
+ExprNode *_eval_assign(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
+    ExprNode *right = _eval(interpreter, scope, expr->second, a);
+    _assign_expr(scope, expr->first->string_value, right);
+    return right;
 }
 
 void interpreter_eval(Interpreter *interpreter) {

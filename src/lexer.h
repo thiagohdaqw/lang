@@ -30,6 +30,8 @@ typedef enum token_t {
     T_LEQUAL,
     T_END,
     T_FUNC,
+    T_IF,
+    T_ELSE
 } TokenType;
 
 typedef struct token {
@@ -73,6 +75,7 @@ bool lexer_is_eof(Lexer *lexer);
 bool lexer_next_token(Lexer *lexer);
 void lexer_expect_token(Lexer *lexer, TokenType type);
 void lexer_expect_literal(Lexer *lexer, char value);
+Token lexer_peek_next_token(Lexer *lexer);
 
 #endif // __LEXER_H_INCLUDED__
 
@@ -286,10 +289,14 @@ bool parse_identifier(Lexer *lexer) {
     lexer->token.type = T_IDENTIFIER;
     lexer->token.identifier_value[lexer->token.identifier_size] = 0;
 
-    if (strcmp(lexer->token.identifier_value, "func") == 0) {
-        lexer->token.type = T_FUNC;
-    } else if (strcmp(lexer->token.identifier_value, "fim") == 0) {
+    if (strcmp(lexer->token.identifier_value, "fim") == 0) {
         lexer->token.type = T_END;
+    } else if (strcmp(lexer->token.identifier_value, "func") == 0) {
+        lexer->token.type = T_FUNC;
+    } else if (strcmp(lexer->token.identifier_value, "se") == 0) {
+        lexer->token.type = T_IF;
+    } else if (strcmp(lexer->token.identifier_value, "senao") == 0) {
+        lexer->token.type = T_ELSE;
     }
 
     return true;
@@ -322,13 +329,6 @@ bool parse_number(Lexer *lexer, int factor) {
     lexer->token.type = T_LONG;
     lexer->token.long_value = factor * strtol(start, NULL, 10);
     return true;
-}
-
-char lexer_peek_next_char(Lexer *lexer) {
-    Reader r = lexer_save_reader(lexer);
-    char value = next_char(lexer);
-    lexer_rewind_reader(lexer, r);
-    return value;
 }
 
 bool lexer_next_token(Lexer *lexer) {
@@ -373,6 +373,23 @@ void lexer_expect_literal(Lexer *lexer, char value) {
         LEXER_ERROR_PRINT(lexer, "Expected literal %c but got literal %c\n", value, lexer->token.literal_value);
         exit(1);
     }
+}
+
+char lexer_peek_next_char(Lexer *lexer) {
+    Reader r = lexer_save_reader(lexer);
+    char value = next_char(lexer);
+    lexer_rewind_reader(lexer, r);
+    return value;
+}
+
+Token lexer_peek_next_token(Lexer *lexer) {
+    Reader r = lexer_save_reader(lexer);
+    Token t = lexer->token;
+    lexer_next_token(lexer);
+    Token next_token = lexer->token;
+    lexer->token = t;
+    lexer_rewind_reader(lexer, r);
+    return next_token;
 }
 
 #endif //__LEXER_H_IMP__

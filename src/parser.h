@@ -18,6 +18,8 @@ typedef enum {
     P_MULT,
     P_FUNC,
     P_FUN_CALL,
+    P_IF,
+    P_BLOCK,
 } ExprType;
 
 typedef struct op_node_t ExprNode;
@@ -35,8 +37,10 @@ typedef struct op_node_t {
     double number_value;
     char char_value;
     char *string_value;
-    ExprNode *left;
-    ExprNode *right;
+
+    ExprNode *first;
+    ExprNode *second;
+    ExprNode *third;
 
     FunArgs args;
 
@@ -72,32 +76,32 @@ ExprNode *node_number(Arena *a, double value) {
 ExprNode *node_plus(Arena *a, ExprNode *left, ExprNode *right) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->type = P_PLUS;
-    node->left = left;
-    node->right = right;
+    node->first = left;
+    node->second = right;
     return node;
 }
 
 ExprNode *node_minus(Arena *a, ExprNode *right) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->type = P_MINUS;
-    node->left = NULL;
-    node->right = right;
+    node->first = NULL;
+    node->second = right;
     return node;
 }
 
 ExprNode *node_mult(Arena *a, ExprNode *left, ExprNode *right) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->type = P_MULT;
-    node->left = left;
-    node->right = right;
+    node->first = left;
+    node->second = right;
     return node;
 }
 
 ExprNode *node_div(Arena *a, ExprNode *left, ExprNode *right) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->type = P_DIV;
-    node->left = left;
-    node->right = right;
+    node->first = left;
+    node->second = right;
     return node;
 }
 
@@ -111,8 +115,8 @@ ExprNode *node_identifier(Arena *a, const char *value) {
 ExprNode *node_assign(Arena *a, ExprNode *left, ExprNode *right) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->type = P_ASSIGN;
-    node->left = left;
-    node->right = right;
+    node->first = left;
+    node->second = right;
     return node;
 }
 
@@ -140,6 +144,24 @@ ExprNode *node_func(Arena *a, const char *identifier) {
     node->capacity = 0;
     node->count = 0;
     node->type = P_FUNC;
+    return node;
+}
+
+ExprNode *node_if(Arena *a, ExprNode *condition_node, ExprNode *then_node, ExprNode *else_node) {
+    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
+    node->type = P_IF;
+    node->first = condition_node;
+    node->second = then_node;
+    node->third = else_node;
+    return node;
+}
+
+ExprNode *node_block(Arena *a) {
+    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
+    node->type = P_BLOCK;
+    node->items = NULL;
+    node->count = 0;
+    node->capacity = 0;
     return node;
 }
 
@@ -177,80 +199,37 @@ int get_infix_power(TokenType type) {
 
 ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int min_power);
 
-ExprNode *_parse_unop(Lexer *lexer, Arena *arena) {
+ExprNode *_parse_identifier(Lexer *lexer, Arena *arena);
+
+ExprNode *_parse_func(Lexer *lexer, Arena *arena);
+
+ExprNode *_parse_if(Lexer *lexer, Arena *arena);
+
+ExprNode *_parse_prefix(Lexer *lexer, Arena *arena) {
     if (!lexer_next_token(lexer)) return NULL;
 
     switch (lexer->token.type) {
     case T_NEW_LINE:
+    case T_ELSE:
+    case T_END:
+        return NULL;
+    case T_LITERAL:
+        if (lexer->token.literal_value == '-') {
+            return node_minus(arena, _parser_expression(lexer, arena, 70));
+        }
         return NULL;
     case T_LONG:
         return node_number(arena, (double)lexer->token.long_value);
     case T_DOUBLE:
         return node_number(arena, lexer->token.double_value);
-    case T_LITERAL:
-        if (lexer->token.literal_value == '-') {
-            return node_minus(arena, _parser_expression(lexer, arena, 70));
-        }
-        break;
     case T_STRING:
         return node_string(arena, lexer->token.string_value);
-    case T_IDENTIFIER: {
-        if (lexer_peek_next_char(lexer) != '(') {
-            return node_identifier(arena, lexer->token.identifier_value);
-        }
-
-        ExprNode *funcall = node_funcall(arena, lexer->token.identifier_value);
-        lexer_expect_token(lexer, T_OPAREN);
-        while (lexer_peek_next_char(lexer) != ')') {
-            ExprNode *arg = _parser_expression(lexer, arena, 0);
-            if (arg == NULL) break;
-            da_append(&funcall->args, arg);
-
-            if (lexer_peek_next_char(lexer) != ',') {
-                break;
-            }
-            lexer_expect_literal(lexer, ',');
-        }
-        lexer_expect_token(lexer, T_CPAREN);
-        return funcall;
-    }
-    case T_FUNC: {
-        lexer_expect_token(lexer, T_IDENTIFIER);
-        ExprNode *func = node_func(arena, lexer->token.identifier_value);
-        lexer_expect_token(lexer, T_OPAREN);
-
-        while (lexer_peek_next_char(lexer) != ')') {
-            lexer_expect_token(lexer, T_IDENTIFIER);
-            ExprNode *arg = node_identifier(arena, lexer->token.identifier_value);
-            da_append(&func->args, arg);
-
-            if (lexer_peek_next_char(lexer) != ',') {
-                break;
-            }
-            lexer_expect_literal(lexer, ',');
-        }
-        lexer_expect_token(lexer, T_CPAREN);
-        lexer_expect_literal(lexer, ':');
-
-        while (1) {
-            Reader r = lexer_save_reader(lexer);
-            if (!lexer_next_token(lexer)) goto end_func_body;
-            if (lexer->token.type == T_END) goto end_func_body;
-            lexer_rewind_reader(lexer, r);
-
-            ExprNode *body = _parser_expression(lexer, arena, 0);
-            if (!body) continue;
-            da_append(func, body);
-
-            continue;
-        end_func_body:
-            lexer_rewind_reader(lexer, r);
-            break;
-        }
-
-        lexer_expect_token(lexer, T_END);
-        return func;
-    } break;
+    case T_IDENTIFIER:
+        return _parse_identifier(lexer, arena);
+    case T_FUNC:
+        return _parse_func(lexer, arena);
+    case T_IF:
+        return _parse_if(lexer, arena);
     default:
         LEXER_ERROR_PRINT(lexer, "Unexpected unop type: %d\n", lexer->token.type);
         assert(0 && "Unexpected unop");
@@ -258,7 +237,7 @@ ExprNode *_parse_unop(Lexer *lexer, Arena *arena) {
 }
 
 ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
-    ExprNode *left = _parse_unop(lexer, arena);
+    ExprNode *left = _parse_prefix(lexer, arena);
     if (!left) return left;
 
     Reader r = lexer_save_reader(lexer);
@@ -296,12 +275,7 @@ ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
             return node_assign(arena, left, right);
         } break;
         default:
-            // case T_NEW_LINE:
-            // case T_CPAREN:
-            // case T_LITERAL:
             goto rewind;
-            // LEXER_ERROR_PRINT(lexer, "Unexpected token: %d => %c\n", lexer->token.type, lexer->token.literal_value);
-            // assert(0 && "unexpected token");
         }
     }
 rewind:
@@ -310,6 +284,107 @@ rewind:
 }
 
 ExprNode *parser_expression(Lexer *lexer, Arena *arena) { _parser_expression(lexer, arena, 0); }
+
+ExprNode *_parse_func(Lexer *lexer, Arena *arena) {
+    lexer_expect_token(lexer, T_IDENTIFIER);
+    ExprNode *func = node_func(arena, lexer->token.identifier_value);
+    lexer_expect_token(lexer, T_OPAREN);
+
+    while (lexer_peek_next_char(lexer) != ')') {
+        lexer_expect_token(lexer, T_IDENTIFIER);
+        ExprNode *arg = node_identifier(arena, lexer->token.identifier_value);
+        da_append(&func->args, arg);
+
+        if (lexer_peek_next_char(lexer) != ',') {
+            break;
+        }
+        lexer_expect_literal(lexer, ',');
+    }
+    lexer_expect_token(lexer, T_CPAREN);
+    lexer_expect_literal(lexer, ':');
+
+    while (1) {
+        Reader r = lexer_save_reader(lexer);
+        if (!lexer_next_token(lexer)) goto end_func_body;
+        if (lexer->token.type == T_END) goto end_func_body;
+        lexer_rewind_reader(lexer, r);
+
+        ExprNode *body = _parser_expression(lexer, arena, 0);
+        if (!body) continue;
+        da_append(func, body);
+
+        continue;
+    end_func_body:
+        lexer_rewind_reader(lexer, r);
+        break;
+    }
+
+    lexer_expect_token(lexer, T_END);
+    return func;
+}
+
+ExprNode *_parse_identifier(Lexer *lexer, Arena *arena) {
+    if (lexer_peek_next_char(lexer) != '(') {
+        return node_identifier(arena, lexer->token.identifier_value);
+    }
+
+    ExprNode *funcall = node_funcall(arena, lexer->token.identifier_value);
+    lexer_expect_token(lexer, T_OPAREN);
+    while (lexer_peek_next_char(lexer) != ')') {
+        ExprNode *arg = _parser_expression(lexer, arena, 0);
+        if (arg == NULL) break;
+        da_append(&funcall->args, arg);
+
+        if (lexer_peek_next_char(lexer) != ',') {
+            break;
+        }
+        lexer_expect_literal(lexer, ',');
+    }
+    lexer_expect_token(lexer, T_CPAREN);
+    return funcall;
+}
+
+ExprNode *_parse_block(Lexer *lexer, Arena *arena) {
+    ExprNode *block = node_block(arena);
+    while (1) {
+        Reader r = lexer_save_reader(lexer);
+        ExprNode *node = parser_expression(lexer, arena);
+        if (node == NULL) {
+            switch (lexer->token.type) {
+            case T_END:
+            case T_ELSE:
+                lexer_rewind_reader(lexer, r);
+                return block;
+            case T_NEW_LINE:
+                continue;
+            default:
+                LEXER_ERROR_PRINT(lexer, "Unexpected end of block: %d\n", lexer->token.type);
+                assert(0 && "Unexpected end of block");
+            }
+        }
+
+        da_append(block, node);
+    }
+    assert(0 && "Unreachable");
+}
+
+ExprNode *_parse_if(Lexer *lexer, Arena *arena) {
+    ExprNode *condition_node = parser_expression(lexer, arena);
+
+    lexer_expect_literal(lexer, ':');
+
+    ExprNode *then_node = _parse_block(lexer, arena);
+
+    ExprNode *else_node = NULL;
+    if (lexer_peek_next_token(lexer).type == T_ELSE) {
+        lexer_next_token(lexer);
+        else_node = _parse_block(lexer, arena);
+    }
+
+    lexer_expect_token(lexer, T_END);
+
+    return node_if(arena, condition_node, then_node, else_node);
+}
 
 void print_ws(int depth) {
     for (size_t i = 0; i < depth; i++)
@@ -339,44 +414,44 @@ void _print_expression(ExprNode *expr, int depth) {
         break;
     case P_ASSIGN:
         printf("ASSIGN(\n");
-        _print_expression(expr->left, depth + 1);
+        _print_expression(expr->first, depth + 1);
         printf("\n");
         print_ws(depth + 1);
         printf(",\n");
-        _print_expression(expr->right, depth + 1);
+        _print_expression(expr->second, depth + 1);
         print_ws(depth);
         printf(")\n");
         break;
     case P_PLUS:
         printf("SUM(\n");
-        _print_expression(expr->left, depth + 1);
+        _print_expression(expr->first, depth + 1);
         printf("\n");
         print_ws(depth + 1);
         printf(",\n");
-        _print_expression(expr->right, depth + 1);
+        _print_expression(expr->second, depth + 1);
         printf(")");
         break;
     case P_MULT:
         printf("MULT(\n");
-        _print_expression(expr->left, depth + 1);
+        _print_expression(expr->first, depth + 1);
         printf("\n");
         print_ws(depth + 1);
         printf(",\n");
-        _print_expression(expr->right, depth + 1);
+        _print_expression(expr->second, depth + 1);
         printf(")");
         break;
     case P_MINUS:
         printf("MINUS(\n");
-        _print_expression(expr->right, depth + 1);
+        _print_expression(expr->second, depth + 1);
         printf(")");
         break;
     case P_DIV:
         printf("DIV(\n");
-        _print_expression(expr->left, depth + 1);
+        _print_expression(expr->first, depth + 1);
         printf("\n");
         print_ws(depth + 1);
         printf(",\n");
-        _print_expression(expr->right, depth + 1);
+        _print_expression(expr->second, depth + 1);
         printf(")");
         break;
     case P_FUNC:
