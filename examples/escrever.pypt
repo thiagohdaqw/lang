@@ -1,0 +1,4 @@
+escreva("Hello", " ", "World", "\n")
+escreva("Ola mundo\n")
+escreva("Hello world\n")
+escreva(1*2*3*4+5, "\n")

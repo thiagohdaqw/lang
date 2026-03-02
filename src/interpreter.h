@@ -114,24 +114,21 @@ ExprNode *_eval_funcall(Interpreter *interpreter, IScope *scope, ExprNode *expr,
         expr->args.items[i] = _eval(interpreter, scope, expr->args.items[i], a);
     }
 
-    if (strcmp(expr->string_value, "print") == 0) {
-        assert(expr->args.count == 1);
-        ExprNode *value = expr->args.items[0];
-        if (value->type == P_IDENTIFIER) {
-            value = _eval(interpreter, scope, value, a);
+    if (strcmp(expr->string_value, "escreva") == 0) {
+        for (size_t i = 0; i < expr->args.count; i++) {
+            ExprNode *value = _eval(interpreter, scope, expr->args.items[i], a);
+            switch (value->type) {
+            case P_STRING:
+                printf("%s", value->string_value);
+                break;
+            case P_NUMBER:
+                printf("%lf", value->number_value);
+                break;
+            default:
+                fprintf(stderr, "Print not implemented for type: %d\n", value->type);
+                exit(1);
+            }
         }
-        switch (value->type) {
-        case P_STRING:
-            printf("%s", value->string_value);
-            break;
-        case P_NUMBER:
-            printf("%lf\n", value->number_value);
-            break;
-        default:
-            printf("Print not implemented for type: %d\n", value->type);
-            exit(1);
-        }
-        fflush(stdout);
         return NULL;
     }
 
@@ -265,7 +262,7 @@ void interpreter_eval(Interpreter *interpreter) {
         result = _eval(interpreter, &interpreter->main, interpreter->main.items[i], interpreter->allocator);
     }
 
-    parser_print_expression(result);
+    fflush(stdout);
 }
 
 #endif // __INTERPRETER_H_IMP__
