@@ -34,6 +34,7 @@ typedef enum token_t {
     T_IF,
     T_ELSE,
     T_WHILE,
+    T_RETURN,
 } TokenType;
 
 typedef struct token {
@@ -303,6 +304,8 @@ bool parse_identifier(Lexer *lexer) {
         lexer->token.type = T_ELSE;
     } else if (strcmp(id, "enquanto") == 0) {
         lexer->token.type = T_WHILE;
+    } else if (strcmp(id, "retorne") == 0) {
+        lexer->token.type = T_RETURN;
     }
 
     return true;

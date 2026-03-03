@@ -136,7 +136,14 @@ ExprNode *_eval_block(Interpreter *interpreter, IScope *scope, ExprNode *expr, A
 
     for (size_t i = 0; i < expr->count; i++) {
         ret = _eval(interpreter, new_scope, expr->items[i], a);
-        // TODO: ADD EARLY RETURN
+        if (ret && ret->returned) {
+            break;
+        }
+        if (ret && ret->type == P_RETURN) {
+            ret = ret->first;
+            ret->returned = true;
+            break;
+        }
     }
 
     if (ret) {
@@ -188,8 +195,10 @@ ExprNode *_eval_funcall(Interpreter *interpreter, IScope *scope, ExprNode *expr,
         _set_variable(new_scope, func->args.items[i]->string_value, value);
     }
 
+    bool returned;
     ExprNode *ret = _eval_block(interpreter, new_scope, func->first, a);
     if (ret) {
+        ret->returned = false;
         ret = arena_copy(interpreter->temp_allocator, ret, sizeof(*ret));
     }
 
@@ -224,8 +233,14 @@ ExprNode *_eval_while(Interpreter *interpreter, IScope *scope, ExprNode *expr, A
         if (!cond->number_value) break;
 
         ret = _eval_block(interpreter, scope, expr->second, a);
+        if (ret && ret->returned) break;
     }
     return ret;
+}
+
+ExprNode *_eval_return(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
+    expr->first = _eval(interpreter, scope, expr->first, a);
+    return expr;
 }
 
 ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
@@ -243,6 +258,8 @@ ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *
         return _eval_if(interpreter, scope, expr, a);
     case P_WHILE:
         return _eval_while(interpreter, scope, expr, a);
+    case P_RETURN:
+        return _eval_return(interpreter, scope, expr, a);
     case P_PLUS:
     case P_DIV:
     case P_MULT:
@@ -257,7 +274,7 @@ ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *
         return node_number(a, result);
     }
     case P_MINUS: {
-        ExprNode *result = _eval(interpreter, scope, expr->second, a);
+        ExprNode *result = _eval(interpreter, scope, expr->first, a);
         assert(result && "Unexpected minus result null");
         assert(result->type == P_NUMBER && "Minus result is not a number");
         return node_number(a, (-1) * result->number_value);

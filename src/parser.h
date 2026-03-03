@@ -41,6 +41,8 @@ typedef struct op_node_t {
     char char_value;
     char *string_value;
 
+    bool returned;
+
     ExprNode *first;
     ExprNode *second;
     ExprNode *third;
@@ -84,11 +86,10 @@ ExprNode *node_plus(Arena *a, ExprNode *left, ExprNode *right) {
     return node;
 }
 
-ExprNode *node_minus(Arena *a, ExprNode *right) {
+ExprNode *node_minus(Arena *a, ExprNode *value) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->type = P_MINUS;
-    node->first = NULL;
-    node->second = right;
+    node->first = value;
     return node;
 }
 
@@ -184,6 +185,13 @@ ExprNode *node_while(Arena *a, ExprNode *condition, ExprNode *body) {
     return node;
 }
 
+ExprNode *node_return(Arena *a, ExprNode *return_value) {
+    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
+    node->type = P_RETURN;
+    node->first = return_value;
+    return node;
+}
+
 ExprNode *node_op(Arena *a, TokenType op, ExprNode *left, ExprNode *right) {
     switch (op) {
     case T_PLUS:
@@ -240,6 +248,8 @@ ExprNode *_parse_if(Lexer *lexer, Arena *arena);
 
 ExprNode *_parse_while(Lexer *lexer, Arena *arena);
 
+ExprNode *_parse_return(Lexer *lexer, Arena *arena);
+
 ExprNode *_parse_prefix(Lexer *lexer, Arena *arena) {
     if (!lexer_next_token(lexer)) return NULL;
 
@@ -267,6 +277,10 @@ ExprNode *_parse_prefix(Lexer *lexer, Arena *arena) {
         return _parse_if(lexer, arena);
     case T_WHILE:
         return _parse_while(lexer, arena);
+    case T_RETURN:
+        return _parse_return(lexer, arena);
+    case T_MINUS:
+        return node_minus(arena, _parser_expression(lexer, arena, 0));
     default:
         LEXER_ERROR_PRINT(lexer, "Unexpected unop type: %d\n", lexer->token.type);
         assert(0 && "Unexpected unop");
@@ -423,6 +437,11 @@ ExprNode *_parse_while(Lexer *lexer, Arena *arena) {
     return node_while(arena, condition, body);
 }
 
+ExprNode *_parse_return(Lexer *lexer, Arena *arena) {
+    ExprNode *ret = parser_expression(lexer, arena);
+    return node_return(arena, ret);
+}
+
 void print_ws(int depth) {
     for (size_t i = 0; i < depth; i++)
         printf("  ");
@@ -479,7 +498,7 @@ void _print_expression(ExprNode *expr, int depth) {
         break;
     case P_MINUS:
         printf("MINUS(\n");
-        _print_expression(expr->second, depth + 1);
+        _print_expression(expr->first, depth + 1);
         printf(")");
         break;
     case P_DIV:
