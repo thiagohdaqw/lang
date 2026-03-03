@@ -22,6 +22,7 @@ typedef enum {
     P_BLOCK,
     P_IF,
     P_WHILE,
+    P_RETURN,
 } ExprType;
 
 typedef struct op_node_t ExprNode;
@@ -219,6 +220,16 @@ int get_infix_power(TokenType type) {
     }
 }
 
+bool is_infix_right_associative(TokenType type) {
+    switch (type)
+    {
+    case T_POW:
+        return true;
+    default:
+        return false;
+    }
+}
+
 ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int min_power);
 
 ExprNode *_parse_identifier(Lexer *lexer, Arena *arena);
@@ -282,6 +293,11 @@ ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
             int op_power = get_infix_power(op);
 
             if (op_power <= power) goto rewind;
+
+            if (is_infix_right_associative(op)) {
+                op_power -= 1;
+            }
+
             ExprNode *right = _parser_expression(lexer, arena, op_power);
             if (!right) {
                 LEXER_ERROR_PRINT(lexer, "Unexpected token after %c\n", op);
