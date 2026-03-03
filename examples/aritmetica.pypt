@@ -4,3 +4,18 @@ escreva(resultado, "\n")
 
 resultado = 2**3
 escreva("2 elevado a 3 é igual a ", resultado, "\n")
+
+
+escreva("Contagem regressiva\n")
+resultado = 5
+escreva(resultado, "\n")
+resultado = resultado - 1
+escreva(resultado, "\n")
+resultado = resultado - 1
+escreva(resultado, "\n")
+resultado = resultado - 1
+escreva(resultado, "\n")
+resultado = resultado - 1
+escreva(resultado, "\n")
+resultado = resultado - 1
+escreva(resultado, "\n")

@@ -1,0 +1,10 @@
+escreva("Iniciando contagem regressiva\n")
+
+variavel = 5
+
+enquanto variavel:
+    escreva(variavel, "\n")
+    variavel = variavel - 1
+fim
+
+escreva("Fim\n")

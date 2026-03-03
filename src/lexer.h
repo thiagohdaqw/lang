@@ -32,7 +32,8 @@ typedef enum token_t {
     T_END,
     T_FUNC,
     T_IF,
-    T_ELSE
+    T_ELSE,
+    T_WHILE,
 } TokenType;
 
 typedef struct token {
@@ -291,14 +292,17 @@ bool parse_identifier(Lexer *lexer) {
     lexer->token.type = T_IDENTIFIER;
     lexer->token.identifier_value[lexer->token.identifier_size] = 0;
 
-    if (strcmp(lexer->token.identifier_value, "fim") == 0) {
+    char *id = lexer->token.identifier_value;
+    if (strcmp(id, "fim") == 0) {
         lexer->token.type = T_END;
-    } else if (strcmp(lexer->token.identifier_value, "func") == 0) {
+    } else if (strcmp(id, "func") == 0) {
         lexer->token.type = T_FUNC;
-    } else if (strcmp(lexer->token.identifier_value, "se") == 0) {
+    } else if (strcmp(id, "se") == 0) {
         lexer->token.type = T_IF;
-    } else if (strcmp(lexer->token.identifier_value, "senao") == 0) {
+    } else if (strcmp(id, "senao") == 0) {
         lexer->token.type = T_ELSE;
+    } else if (strcmp(id, "enquanto") == 0) {
+        lexer->token.type = T_WHILE;
     }
 
     return true;

@@ -7,11 +7,11 @@ func multiplicacao(a, b):
 fim
 
 func div(a, b):
-    func inner_div():
+    func interna():
         a / b
     fim
 
-    inner_div()
+    interna()
 fim
 
 resultado = soma(32, 10)

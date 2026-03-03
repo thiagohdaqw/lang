@@ -37,20 +37,43 @@ void interpreter_eval(Interpreter *interpreter);
 #ifndef __INTERPRETER_H_IMP__
 #define __INTERPRETER_H_IMP__
 
-#include "utils/stb_ds.h"
 #include "math.h"
+#include "utils/stb_ds.h"
 
-void _assign_expr(IScope *scope, char *key, ExprNode *right) { shput(scope->vars, key, right); }
+void _set_variable(IScope *scope, char *key, ExprNode *right) {
+    ExprNode *existing = shget(scope->vars, key);
+    if (existing) {
+        *existing = *right;
+    } else {
+        shput(scope->vars, key, right);
+    }
+}
+
+void _assign_variable(IScope *scope, char *key, ExprNode *right) {
+    IScope *current = scope;
+    while (1) {
+        if (shget(current->vars, key)) {
+            break;
+        }
+        current = current->parent;
+
+        if (!current) {
+            current = scope;
+            break;
+        }
+    }
+    _set_variable(current, key, right);
+}
 
 Interpreter interpreter_create(Arena *a, Arena *temp_a) {
     Interpreter i = {0};
     i.allocator = a;
     i.temp_allocator = temp_a;
 
-    _assign_expr(&i.main, "verdadeiro", node_number(i.allocator, 1));
-    _assign_expr(&i.main, "falso", node_number(i.allocator, 0));
-    _assign_expr(&i.main, "PI", node_number(i.allocator, M_PI));
-    
+    _assign_variable(&i.main, "verdadeiro", node_number(i.allocator, 1));
+    _assign_variable(&i.main, "falso", node_number(i.allocator, 0));
+    _assign_variable(&i.main, "PI", node_number(i.allocator, M_PI));
+
     return i;
 }
 
@@ -88,7 +111,7 @@ double eval_number(ExprType op, double a, double b) {
 
 ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a);
 
-ExprNode *_eval_identifier(IScope *scope, ExprNode *expr, Interpreter *interpreter, Arena *a);
+ExprNode *_eval_identifier(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a);
 
 ExprNode *_eval_assign(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a);
 
@@ -103,23 +126,34 @@ ExprNode *_get_var(IScope *scope, char *key) {
     return NULL;
 }
 
-ExprNode *_invoke_func(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
-    assert(expr->type == P_FUNC);
-
+ExprNode *_eval_block(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     ExprNode *ret = NULL;
 
+    if (expr->count == 0) return ret;
+
+    ArenaNode saved_arena = arena_save(a);
+    IScope *new_scope = scope_create(a, scope);
+
     for (size_t i = 0; i < expr->count; i++) {
-        ret = _eval(interpreter, scope, expr->items[i], a);
+        ret = _eval(interpreter, new_scope, expr->items[i], a);
+        // TODO: ADD EARLY RETURN
+    }
+
+    if (ret) {
+        ret = arena_copy(interpreter->temp_allocator, ret, sizeof(*ret));
+    }
+
+    scope_destroy(new_scope);
+    arena_rewind(a, saved_arena);
+
+    if (ret) {
+        ret = arena_copy(a, ret, sizeof(*ret));
     }
 
     return ret;
 }
 
 ExprNode *_eval_funcall(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
-    for (size_t i = 0; i < expr->count; i++) {
-        expr->args.items[i] = _eval(interpreter, scope, expr->args.items[i], a);
-    }
-
     if (strcmp(expr->string_value, "escreva") == 0) {
         for (size_t i = 0; i < expr->args.count; i++) {
             ExprNode *value = _eval(interpreter, scope, expr->args.items[i], a);
@@ -144,47 +178,27 @@ ExprNode *_eval_funcall(Interpreter *interpreter, IScope *scope, ExprNode *expr,
         exit(1);
     }
 
-    ArenaNode temp_arena_start = arena_save(interpreter->temp_allocator);
+    ArenaNode arena_saved = arena_save(a);
 
-    IScope *new_scope = scope_create(interpreter->temp_allocator, scope);
+    IScope *new_scope = scope_create(a, scope);
 
     assert(func->args.count == expr->args.count);
     for (size_t i = 0; i < expr->args.count; i++) {
-        ExprNode *value = _eval(interpreter, scope, expr->args.items[i], interpreter->temp_allocator);
-        _assign_expr(new_scope, func->args.items[i]->string_value, value);
+        ExprNode *value = _eval(interpreter, new_scope, expr->args.items[i], a);
+        _set_variable(new_scope, func->args.items[i]->string_value, value);
     }
 
-    ExprNode *ret = _invoke_func(interpreter, new_scope, func, interpreter->temp_allocator);
-
+    ExprNode *ret = _eval_block(interpreter, new_scope, func->first, a);
     if (ret) {
-        ret = (ExprNode *)arena_copy(a, ret, sizeof(*ret));
+        ret = arena_copy(interpreter->temp_allocator, ret, sizeof(*ret));
     }
 
     scope_destroy(new_scope);
-    arena_rewind(interpreter->temp_allocator, temp_arena_start);
-    return ret;
-}
-
-ExprNode *_eval_block(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
-    ExprNode *ret = NULL;
-
-    if (expr->count == 0) return ret;
-
-    ArenaNode saved_arena = arena_save(interpreter->temp_allocator);
-    IScope *new_scope = scope_create(interpreter->temp_allocator, scope);
-
-    for (size_t i = 0; i < expr->count; i++) {
-        ret = _eval(interpreter, new_scope, expr->items[i], interpreter->temp_allocator);
-        // TODO: ADD EARLY RETURN
-    }
+    arena_rewind(a, arena_saved);
 
     if (ret) {
         ret = arena_copy(a, ret, sizeof(*ret));
     }
-
-    scope_destroy(new_scope);
-    arena_rewind(interpreter->temp_allocator, saved_arena);
-
     return ret;
 }
 
@@ -201,19 +215,34 @@ ExprNode *_eval_if(Interpreter *interpreter, IScope *scope, ExprNode *expr, Aren
     return NULL;
 }
 
+ExprNode *_eval_while(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
+    ExprNode *ret = NULL;
+    while (1) {
+        ExprNode *cond = _eval(interpreter, scope, expr->first, a);
+        assert(cond && cond->type == P_NUMBER);
+
+        if (!cond->number_value) break;
+
+        ret = _eval_block(interpreter, scope, expr->second, a);
+    }
+    return ret;
+}
+
 ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     switch (expr->type) {
-    case P_IDENTIFIER:
-        return _eval_identifier(scope, expr, interpreter, a);
     case P_NUMBER:
     case P_STRING:
         return expr;
+    case P_IDENTIFIER:
+        return _eval_identifier(interpreter, scope, expr, a);
     case P_ASSIGN:
         return _eval_assign(interpreter, scope, expr, a);
     case P_FUN_CALL:
         return _eval_funcall(interpreter, scope, expr, a);
     case P_IF:
         return _eval_if(interpreter, scope, expr, a);
+    case P_WHILE:
+        return _eval_while(interpreter, scope, expr, a);
     case P_PLUS:
     case P_DIV:
     case P_MULT:
@@ -238,7 +267,7 @@ ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *
             fprintf(stderr, "Function '%s' already defined", expr->string_value);
             exit(1);
         }
-        shput(scope->vars, expr->string_value, expr);
+        _assign_variable(scope, expr->string_value, expr);
         return expr;
     }
     default:
@@ -247,7 +276,7 @@ ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *
     }
 }
 
-ExprNode *_eval_identifier(IScope *scope, ExprNode *expr, Interpreter *interpreter, Arena *a) {
+ExprNode *_eval_identifier(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     ExprNode *id = _get_var(scope, expr->string_value);
     if (!id) {
         fprintf(stderr, "Identifier '%s' not found\n", expr->string_value);
@@ -259,14 +288,18 @@ ExprNode *_eval_identifier(IScope *scope, ExprNode *expr, Interpreter *interpret
 
 ExprNode *_eval_assign(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     ExprNode *right = _eval(interpreter, scope, expr->second, a);
-    _assign_expr(scope, expr->first->string_value, right);
+    _assign_variable(scope, expr->first->string_value, right);
     return right;
 }
 
 void interpreter_eval(Interpreter *interpreter) {
     ExprNode *result = NULL;
     for (size_t i = 0; i < interpreter->main.count; i++) {
+        ArenaNode temp_saved = arena_save(interpreter->temp_allocator);
+
         result = _eval(interpreter, &interpreter->main, interpreter->main.items[i], interpreter->allocator);
+
+        arena_rewind(interpreter->temp_allocator, temp_saved);
     }
 
     fflush(stdout);
