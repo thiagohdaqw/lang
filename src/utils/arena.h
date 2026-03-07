@@ -21,6 +21,7 @@ void *arena_copy(Arena *a, const void *item, long size);
 ArenaNode arena_save(Arena *a);
 void arena_rewind(Arena *a, ArenaNode n);
 char *arena_strjoin(Arena *a, const char *str1, const char *str2);
+char *arena_strformat(Arena *a, const char *format, ...);
 
 #endif // __ARENA_H_INCLUDED__
 
@@ -28,6 +29,7 @@ char *arena_strjoin(Arena *a, const char *str1, const char *str2);
 #define __ARENA_H_IMP__
 
 #include <assert.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -107,8 +109,19 @@ char *arena_strjoin(Arena *a, const char *str1, const char *str2) {
     char *buffer = (char *)arena_alloc(a, strLen1 + strLen2 + 1);
     memcpy(buffer, str1, strLen1);
     memcpy(buffer + strLen1, str2, strLen2);
-    buffer[strLen1+strLen2] = '\0';
+    buffer[strLen1 + strLen2] = '\0';
     return buffer;
+}
+
+#define ARENA_FORMAT_BUFFER 1024
+static char format_buffer[ARENA_FORMAT_BUFFER] = {0};
+char *arena_strformat(Arena *a, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    int length = vsnprintf(format_buffer, ARENA_FORMAT_BUFFER - 1, format, args);
+    assert(length < ARENA_FORMAT_BUFFER - 1);
+    va_end(args);
+    return arena_strdup(a, format_buffer);
 }
 
 #endif
