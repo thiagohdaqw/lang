@@ -70,9 +70,9 @@ void compiler_destroy(Compiler *c) {
 }
 
 void create_c_entry(Compiler *c) {
-    const char *c_entry = "extern int pypt_entry(int argc, char **argv);\n"
+    const char *c_entry = "extern int pypt_main(int argc, char **argv);\n"
                           "int main(int argc, char **argv) {\n"
-                          "    return pypt_entry(argc, argv);\n"
+                          "    return pypt_main(argc, argv);\n"
                           "}\n";
 
     c->entry_path = arena_strjoin(&c->allocator, c->build_folder, "entry.c");
@@ -123,6 +123,7 @@ void compiler_compile(Compiler *c) {
 
     // TOOD: create a arena_printf
     char *compile_command = arena_strjoin(&c->allocator, "gcc ", c->c_args);
+    compile_command = arena_strjoin(&c->allocator, compile_command, " ");
     compile_command = arena_strjoin(&c->allocator, compile_command, c->entry_path);
     compile_command = arena_strjoin(&c->allocator, compile_command, " ");
     compile_command = arena_strjoin(&c->allocator, compile_command, output_object_path);
