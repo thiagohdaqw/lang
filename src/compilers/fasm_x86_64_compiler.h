@@ -83,9 +83,15 @@ bool fasm_x86_64_compiler_init(FX8664Compiler *c, const char *build_folder) {
     c->asm_file_path = arena_strjoin(&c->allocator, build_folder, "fasm_x86_out.asm");
     c->asm_file = file_create(c->asm_file_path);
 
-    const char *fasm_entry = "format ELF64\n"
-                             "public pypt_main\n\n"
-                             "section '.text' executable align 16\n\n";
+    const char *fasm_entry = "format ELF64 executable 3\n"
+                             "entry pypt_entry\n\n"
+                             "segment gnustack\n"
+                             "segment executable\n\n"
+                             "pypt_entry:\n"
+                             "    call pypt_main\n"
+                             "    mov rdi, rax\n"
+                             "    mov rax, 60\n"
+                             "    syscall\n\n";
 
     file_write(c->asm_file, fasm_entry);
     return true;
@@ -163,12 +169,12 @@ void fasm_x86_64_compiler_generate_assembly(FX8664Compiler *c) {
     fclose(c->asm_file);
 }
 
-bool fasm_x86_64_compiler_compile(FX8664Compiler *c, const char *object_output_path) {
+bool fasm_x86_64_compiler_compile(FX8664Compiler *c, const char *output) {
     ArenaNode saved = arena_save(&c->allocator);
 
     const char *fasm_command = arena_strjoin(&c->allocator, "fasm ", c->asm_file_path);
     fasm_command = arena_strjoin(&c->allocator, fasm_command, " ");
-    fasm_command = arena_strjoin(&c->allocator, fasm_command, object_output_path);
+    fasm_command = arena_strjoin(&c->allocator, fasm_command, output);
 
     printf("Executing: %s\n", fasm_command);
     int ret = system(fasm_command);
