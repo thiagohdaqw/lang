@@ -30,11 +30,11 @@ int interpret(int argc, char** argv) {
         interpreter_append(&interpreter, expr);
     }
 
-    interpreter_eval(&interpreter);
+    int ret = interpreter_eval(&interpreter);
 
     arena_destroy(&arena);
 
-    return 0;
+    return ret;
 }
 
 int compile(int argc, char** argv) {

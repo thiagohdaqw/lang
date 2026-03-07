@@ -30,7 +30,7 @@ typedef struct {
 
 Interpreter interpreter_create(Arena *a, Arena *temp_a);
 void interpreter_append(Interpreter *i, ExprNode *node);
-void interpreter_eval(Interpreter *interpreter);
+int interpreter_eval(Interpreter *interpreter);
 
 #endif // __INTERPRETER_H_INCLUDED__
 
@@ -310,7 +310,7 @@ ExprNode *_eval_assign(Interpreter *interpreter, IScope *scope, ExprNode *expr, 
     return right;
 }
 
-void interpreter_eval(Interpreter *interpreter) {
+int interpreter_eval(Interpreter *interpreter) {
     ExprNode *result = NULL;
     for (size_t i = 0; i < interpreter->main.count; i++) {
         ArenaNode temp_saved = arena_save(interpreter->temp_allocator);
@@ -321,6 +321,11 @@ void interpreter_eval(Interpreter *interpreter) {
     }
 
     fflush(stdout);
+
+    if (result && result->type == P_RETURN) {
+        return result->first->number_value;
+    }
+    return 0;
 }
 
 #endif // __INTERPRETER_H_IMP__

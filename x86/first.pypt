@@ -1,0 +1,5 @@
+func soma(a, b):
+    retorne a + b
+fim
+
+retorne soma(10, 2)

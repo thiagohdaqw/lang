@@ -458,10 +458,10 @@ void _print_expression(ExprNode *expr, int depth) {
         break;
     case P_FUN_CALL:
         printf("FUNCALL(%s,\n", expr->string_value);
-        for (size_t i = 0; i < expr->count; i++) {
+        for (size_t i = 0; i < expr->args.count; i++) {
             print_ws(depth);
             if (i > 0) printf(",\n");
-            _print_expression(expr->items[i], depth + 1);
+            _print_expression(expr->args.items[i], depth + 1);
         }
         printf(")\n");
         break;
