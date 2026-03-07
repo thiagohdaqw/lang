@@ -84,7 +84,7 @@ void create_c_entry(Compiler *c) {
 }
 
 bool compiler_init(Compiler *c) {
-    // create_c_entry(c);
+    create_c_entry(c);
 
     switch (c->type) {
     case FX86:
@@ -113,7 +113,7 @@ void compiler_compile(Compiler *c) {
     switch (c->type) {
     case FX86:
         fasm_x86_64_compiler_generate_assembly(&c->fx86_compiler);
-        if (!fasm_x86_64_compiler_compile(&c->fx86_compiler, c->output_executable_path)) {
+        if (!fasm_x86_64_compiler_compile(&c->fx86_compiler, output_object_path)) {
             return;
         }
         break;
@@ -122,19 +122,19 @@ void compiler_compile(Compiler *c) {
     }
 
     // TOOD: create a arena_printf
-    // char *compile_command = arena_strjoin(&c->allocator, "gcc ", c->c_args);
-    // compile_command = arena_strjoin(&c->allocator, compile_command, " ");
-    // compile_command = arena_strjoin(&c->allocator, compile_command, c->entry_path);
-    // compile_command = arena_strjoin(&c->allocator, compile_command, " ");
-    // compile_command = arena_strjoin(&c->allocator, compile_command, output_object_path);
-    // compile_command = arena_strjoin(&c->allocator, compile_command, " -o ");
-    // compile_command = arena_strjoin(&c->allocator, compile_command, c->output_executable_path);
-    // compile_command = arena_strjoin(&c->allocator, compile_command, " ");
-    // compile_command = arena_strjoin(&c->allocator, compile_command, c->linker_args);
+    char *compile_command = arena_strjoin(&c->allocator, "gcc ", c->c_args);
+    compile_command = arena_strjoin(&c->allocator, compile_command, " ");
+    compile_command = arena_strjoin(&c->allocator, compile_command, c->entry_path);
+    compile_command = arena_strjoin(&c->allocator, compile_command, " ");
+    compile_command = arena_strjoin(&c->allocator, compile_command, output_object_path);
+    compile_command = arena_strjoin(&c->allocator, compile_command, " -o ");
+    compile_command = arena_strjoin(&c->allocator, compile_command, c->output_executable_path);
+    compile_command = arena_strjoin(&c->allocator, compile_command, " ");
+    compile_command = arena_strjoin(&c->allocator, compile_command, c->linker_args);
 
-    // printf("Executing: %s\n", compile_command);
-    // int ret = system(compile_command);
-    // printf("Returned: %d\n", ret);
+    printf("Executing: %s\n", compile_command);
+    int ret = system(compile_command);
+    printf("Returned: %d\n", ret);
 
     arena_rewind(&c->allocator, saved);
 }
