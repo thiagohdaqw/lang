@@ -20,6 +20,7 @@ void arena_destroy(Arena *a);
 void *arena_copy(Arena *a, const void *item, long size);
 ArenaNode arena_save(Arena *a);
 void arena_rewind(Arena *a, ArenaNode n);
+char *arena_strjoin(Arena *a, const char *str1, const char *str2);
 
 #endif // __ARENA_H_INCLUDED__
 
@@ -98,6 +99,16 @@ char *arena_strdup(Arena *a, const char *str) {
     char *out = (char *)arena_copy(a, str, strSize + 1);
     out[strSize] = '\0';
     return out;
+}
+
+char *arena_strjoin(Arena *a, const char *str1, const char *str2) {
+    int strLen1 = strlen(str1);
+    int strLen2 = strlen(str2);
+    char *buffer = (char *)arena_alloc(a, strLen1 + strLen2 + 1);
+    memcpy(buffer, str1, strLen1);
+    memcpy(buffer + strLen1, str2, strLen2);
+    buffer[strLen1+strLen2] = '\0';
+    return buffer;
 }
 
 #endif

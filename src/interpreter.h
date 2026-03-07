@@ -72,6 +72,7 @@ Interpreter interpreter_create(Arena *a, Arena *temp_a) {
 
     _assign_variable(&i.main, "verdadeiro", node_number(i.allocator, 1));
     _assign_variable(&i.main, "falso", node_number(i.allocator, 0));
+    _assign_variable(&i.main, "NULO", node_number(i.allocator, 0));
     _assign_variable(&i.main, "PI", node_number(i.allocator, M_PI));
 
     return i;

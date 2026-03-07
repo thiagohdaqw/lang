@@ -92,6 +92,7 @@ Token lexer_peek_next_token(Lexer *lexer);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "utils/file.h"
 
 #define get_char(l) (l->reader.reader[l->reader.position])
 #define is_eof(l)                                                                                                      \
@@ -104,27 +105,11 @@ bool lexer_is_eof(Lexer *lexer) { return is_eof(lexer); }
 
 char lexer_peek_next_char(Lexer *lexer);
 
-char *read_file(const char *filename, long *size) {
-    FILE *f = fopen(filename, "rb");
-    if (!f) return NULL;
-
-    fseek(f, 0, SEEK_END);
-    *size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    char *buffer = (char *)malloc(*size + 1);
-    fread(buffer, 1, *size, f);
-    buffer[*size] = '\0';
-
-    fclose(f);
-    return buffer;
-}
-
 bool lexer_init(Lexer *lexer, const char *path) {
     memset(lexer, 0, sizeof(*lexer));
 
     lexer->path = path;
-    lexer->reader.reader = read_file(path, &lexer->reader.size);
+    lexer->reader.reader = file_read(path, &lexer->reader.size);
     lexer->reader.position = -1;
 
     if (!lexer->reader.reader || lexer->reader.size <= 0) {
