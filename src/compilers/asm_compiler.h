@@ -63,6 +63,9 @@ bool asm_compiler_init(AsmCompiler *c, const char *build_folder);
 void asm_compiler_destroy(AsmCompiler *c);
 void asm_compiler_append_expression(AsmCompiler *c, ExprNode *expr);
 void asm_compiler_generate_assembly(AsmCompiler *c);
+void _generate_func_section(AsmCompiler *c);
+void _generate_data_section(AsmCompiler *c);
+void _generate_external_funcs_section(AsmCompiler *c);
 bool asm_compiler_compile(AsmCompiler *c, const char *object_output_path);
 
 #endif // __ASM_COMPILER_H_INCLUDED__
@@ -141,13 +144,9 @@ static CNode *node_create(Arena *a, ExprNode *expr) {
 static CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena *a, int depth);
 
 void asm_compiler_generate_assembly(AsmCompiler *c) {
-    for (size_t i = 0; i < c->funcs.count; i++) {
-        ArenaNode saved = arena_save(&c->allocator);
+    ArenaNode saved = arena_save(&c->allocator);
 
-        _compile_expression(c, &c->main_scope, c->funcs.items[i], &c->allocator, 0);
-
-        arena_rewind(&c->allocator, saved);
-    }
+    _generate_func_section(c);
 
     asm_write(c, 0, "pypt_main:\n");
     asm_write(c, 1, "push rbp\n");
@@ -155,7 +154,6 @@ void asm_compiler_generate_assembly(AsmCompiler *c) {
 
     CNode *result = NULL;
 
-    ArenaNode saved = arena_save(&c->allocator);
     for (size_t i = 0; i < c->main.count; i++) {
         ExprNode *current = c->main.items[i];
         if (current->type == P_RETURN) {
@@ -178,17 +176,33 @@ void asm_compiler_generate_assembly(AsmCompiler *c) {
     asm_write(c, 1, "pop rbp\n");
     asm_write(c, 1, "ret\n\n");
 
-    asm_write(c, 0, "; External funcs\n");
-    for (size_t i = 0; i < c->external_funcs.count; i++) {
-        asm_fwrite(c, &c->allocator, 0, "extrn %s\n", c->external_funcs.items[i]);
-    }
+    _generate_external_funcs_section(c);
 
+    _generate_data_section(c);
+
+    asm_write(c, 0, "\n");
+
+    fclose(c->asm_file);
+    arena_rewind(&c->allocator, saved);
+}
+
+void _generate_func_section(AsmCompiler *c) {
+    for (size_t i = 0; i < c->funcs.count; i++) {
+        ArenaNode saved = arena_save(&c->allocator);
+
+        _compile_expression(c, &c->main_scope, c->funcs.items[i], &c->allocator, 0);
+
+        arena_rewind(&c->allocator, saved);
+    }
+}
+
+void _generate_data_section(AsmCompiler *c) {
     asm_write(c, 0, "\n; Data section\n");
     asm_write(c, 0, "section '.data'\n");
     for (size_t i = 0; i < shlen(c->data); i++) {
         CNode *value = c->data[i].value;
         asm_fwrite(c, &c->allocator, 1, "%s db \"", value->identifier);
-        
+
         char *start = value->expr->string_value;
         for (char *buffer = start; *buffer != '\0'; buffer++) {
             if (*buffer == '\n') {
@@ -196,18 +210,20 @@ void asm_compiler_generate_assembly(AsmCompiler *c) {
                 start = buffer + 1;
             }
         }
-        
+
         if (*start != '\0') {
             asm_fwrite(c, &c->allocator, 0, "%s\",0", start);
         } else {
             asm_write(c, 0, "\",0");
         }
     }
+}
 
-    asm_write(c, 0, "\n");
-
-    fclose(c->asm_file);
-    arena_rewind(&c->allocator, saved);
+void _generate_external_funcs_section(AsmCompiler *c) {
+    asm_write(c, 0, "; External funcs\n");
+    for (size_t i = 0; i < c->external_funcs.count; i++) {
+        asm_fwrite(c, &c->allocator, 0, "extrn %s\n", c->external_funcs.items[i]);
+    }
 }
 
 bool asm_compiler_compile(AsmCompiler *c, const char *object_output_path) {
