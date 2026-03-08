@@ -1,3 +1,4 @@
 a = "Hello\nWorld\n"
-write(1, a, strlen(a))
+b = "Hello World\n"
+write(1, a, strlen(b))
 retorne 0

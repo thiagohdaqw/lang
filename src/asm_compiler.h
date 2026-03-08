@@ -214,7 +214,7 @@ void _generate_data_section(AsmCompiler *c) {
         if (*start != '\0') {
             asm_fwrite(c, &c->allocator, 0, "%s\",0", start);
         } else {
-            asm_write(c, 0, "\",0");
+            asm_write(c, 0, "\",0\n");
         }
     }
 }
