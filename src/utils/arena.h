@@ -53,7 +53,7 @@ Arena arena_create(long capacity) {
 
 ArenaNode arena_save(Arena *a) { return *a->current; }
 
-void node_destroy(ArenaNode *n) { free(n->buffer); }
+static void node_destroy(ArenaNode *n) { free(n->buffer); }
 
 void arena_rewind(Arena *a, ArenaNode n) {
     while (a->current->buffer != n.buffer) {

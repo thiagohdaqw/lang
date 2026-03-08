@@ -125,7 +125,7 @@ void lexer_close(Lexer *lexer) { free((void *)lexer->reader.reader); }
 Reader lexer_save_reader(Lexer *lexer) { return lexer->reader; }
 void lexer_rewind_reader(Lexer *lexer, Reader reader) { lexer->reader = reader; }
 
-char next_char(Lexer *lexer) {
+static char next_char(Lexer *lexer) {
     if (lexer->reader.position >= 0 && get_char(lexer) == '\n') {
         lexer->reader.row++;
         lexer->reader.col = 0;
@@ -135,7 +135,7 @@ char next_char(Lexer *lexer) {
     return is_eof(lexer) ? 0 : get_char(lexer);
 }
 
-bool skip_space(Lexer *lexer) {
+static bool skip_space(Lexer *lexer) {
     while (!is_eof(lexer) && isspace(get_char(lexer))) {
         if (get_char(lexer) == '\n') {
             return true;
@@ -145,7 +145,7 @@ bool skip_space(Lexer *lexer) {
     return !is_eof(lexer);
 }
 
-bool parse_char(Lexer *lexer) {
+static bool parse_char(Lexer *lexer) {
     next_char(lexer);
     if (is_eof(lexer)) {
         LEXER_ERROR_PRINT(lexer, "Expected a character but got EOF\n");
@@ -167,7 +167,7 @@ bool parse_char(Lexer *lexer) {
     return true;
 }
 
-bool parse_string(Lexer *lexer) {
+static bool parse_string(Lexer *lexer) {
     lexer->token.type = T_STRING;
     lexer->token.string_size = 0;
 
@@ -198,7 +198,7 @@ bool parse_string(Lexer *lexer) {
     return true;
 }
 
-bool parse_literal(Lexer *lexer) {
+static bool parse_literal(Lexer *lexer) {
     lexer->token.literal_value = get_char(lexer);
 
     switch (get_char(lexer)) {
@@ -254,7 +254,7 @@ bool parse_literal(Lexer *lexer) {
     return true;
 }
 
-bool parse_identifier(Lexer *lexer) {
+static bool parse_identifier(Lexer *lexer) {
     lexer->token.identifier_size = 0;
     lexer->token.identifier_value[lexer->token.identifier_size++] = get_char(lexer);
 
@@ -296,7 +296,7 @@ bool parse_identifier(Lexer *lexer) {
     return true;
 }
 
-bool parse_number(Lexer *lexer, int factor) {
+static bool parse_number(Lexer *lexer, int factor) {
     char *start = &lexer->reader.reader[lexer->reader.position];
     bool isDouble = false;
 
@@ -342,7 +342,7 @@ bool lexer_next_token(Lexer *lexer) {
     if (isdigit(get_char(lexer))) {
         return parse_number(lexer, 1);
     }
-    if (isalpha(get_char(lexer)) || get_char(lexer) == '_') {
+    if (is_identifier_char(get_char(lexer))) {
         return parse_identifier(lexer);
     }
     if (get_char(lexer) == '\'') {

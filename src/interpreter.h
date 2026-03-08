@@ -40,7 +40,7 @@ int interpreter_eval(Interpreter *interpreter);
 #include "math.h"
 #include "utils/stb_ds.h"
 
-void _set_variable(IScope *scope, char *key, ExprNode *right) {
+static void _set_variable(IScope *scope, char *key, ExprNode *right) {
     ExprNode *existing = shget(scope->vars, key);
     if (existing) {
         *existing = *right;
@@ -49,7 +49,7 @@ void _set_variable(IScope *scope, char *key, ExprNode *right) {
     }
 }
 
-void _assign_variable(IScope *scope, char *key, ExprNode *right) {
+static void _assign_variable(IScope *scope, char *key, ExprNode *right) {
     IScope *current = scope;
     while (1) {
         if (shget(current->vars, key)) {
@@ -78,20 +78,20 @@ Interpreter interpreter_create(Arena *a, Arena *temp_a) {
     return i;
 }
 
-IScope *scope_create(Arena *a, IScope *parent) {
+static IScope *scope_create(Arena *a, IScope *parent) {
     IScope *s = (IScope *)arena_alloc(a, sizeof(*s));
     s->parent = parent;
     return s;
 }
 
-void scope_destroy(IScope *scope) {
+static void scope_destroy(IScope *scope) {
     shfree(scope->vars);
     da_destroy(scope);
 }
 
 void interpreter_append(Interpreter *i, ExprNode *node) { da_append(&i->main, node); }
 
-double eval_number(ExprType op, double a, double b) {
+static double eval_number(ExprType op, double a, double b) {
     switch (op) {
     case P_PLUS:
         return a + b;
@@ -110,13 +110,13 @@ double eval_number(ExprType op, double a, double b) {
     }
 }
 
-ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a);
+static ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a);
 
-ExprNode *_eval_identifier(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a);
+static ExprNode *_eval_identifier(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a);
 
-ExprNode *_eval_assign(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a);
+static ExprNode *_eval_assign(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a);
 
-ExprNode *_get_var(IScope *scope, char *key) {
+static ExprNode *_get_var(IScope *scope, char *key) {
     while (scope) {
         ExprNode *value = shget(scope->vars, key);
         if (value) {
@@ -127,7 +127,7 @@ ExprNode *_get_var(IScope *scope, char *key) {
     return NULL;
 }
 
-ExprNode *_eval_block(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
+static ExprNode *_eval_block(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     ExprNode *ret = NULL;
 
     if (expr->count == 0) return ret;
@@ -161,7 +161,7 @@ ExprNode *_eval_block(Interpreter *interpreter, IScope *scope, ExprNode *expr, A
     return ret;
 }
 
-ExprNode *_eval_funcall(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
+static ExprNode *_eval_funcall(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     if (strcmp(expr->string_value, "escreva") == 0) {
         for (size_t i = 0; i < expr->args.count; i++) {
             ExprNode *value = _eval(interpreter, scope, expr->args.items[i], a);
@@ -212,7 +212,7 @@ ExprNode *_eval_funcall(Interpreter *interpreter, IScope *scope, ExprNode *expr,
     return ret;
 }
 
-ExprNode *_eval_if(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
+static ExprNode *_eval_if(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     ExprNode *cond = _eval(interpreter, scope, expr->first, a);
     assert(cond && cond->type == P_NUMBER);
 
@@ -225,7 +225,7 @@ ExprNode *_eval_if(Interpreter *interpreter, IScope *scope, ExprNode *expr, Aren
     return NULL;
 }
 
-ExprNode *_eval_while(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
+static ExprNode *_eval_while(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     ExprNode *ret = NULL;
     while (1) {
         ExprNode *cond = _eval(interpreter, scope, expr->first, a);
@@ -239,12 +239,12 @@ ExprNode *_eval_while(Interpreter *interpreter, IScope *scope, ExprNode *expr, A
     return ret;
 }
 
-ExprNode *_eval_return(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
+static ExprNode *_eval_return(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     expr->first = _eval(interpreter, scope, expr->first, a);
     return expr;
 }
 
-ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
+static ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     switch (expr->type) {
     case P_NUMBER:
     case P_STRING:
@@ -294,7 +294,7 @@ ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *
     }
 }
 
-ExprNode *_eval_identifier(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
+static ExprNode *_eval_identifier(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     ExprNode *id = _get_var(scope, expr->string_value);
     if (!id) {
         fprintf(stderr, "Identifier '%s' not found\n", expr->string_value);
@@ -304,7 +304,7 @@ ExprNode *_eval_identifier(Interpreter *interpreter, IScope *scope, ExprNode *ex
     return id;
 }
 
-ExprNode *_eval_assign(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
+static ExprNode *_eval_assign(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *a) {
     ExprNode *right = _eval(interpreter, scope, expr->second, a);
     _assign_variable(scope, expr->first->string_value, right);
     return right;

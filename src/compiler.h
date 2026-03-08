@@ -69,7 +69,7 @@ void compiler_destroy(Compiler *c) {
     }
 }
 
-void create_c_entry(Compiler *c) {
+static void _create_c_entry(Compiler *c) {
     const char *c_entry = "extern int pypt_main(int argc, char **argv);\n"
                           "int main(int argc, char **argv) {\n"
                           "    return pypt_main(argc, argv);\n"
@@ -84,7 +84,7 @@ void create_c_entry(Compiler *c) {
 }
 
 bool compiler_init(Compiler *c) {
-    create_c_entry(c);
+    _create_c_entry(c);
 
     switch (c->type) {
     case FX86:

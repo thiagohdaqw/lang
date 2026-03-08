@@ -55,7 +55,7 @@ typedef struct op_node_t {
     int count;
 } ExprNode;
 
-ExprNode *parser_expression(Lexer *lexer, Arena *arena);
+ExprNode *parser_parse_expression(Lexer *lexer, Arena *arena);
 void parser_print_expression(ExprNode *expr);
 ExprNode *parser_eval_expr(ExprNode *expr, Arena *a);
 
@@ -211,7 +211,7 @@ ExprNode *node_op(Arena *a, TokenType op, ExprNode *left, ExprNode *right) {
     }
 }
 
-int get_infix_power(TokenType type) {
+static int get_infix_power(TokenType type) {
     switch (type) {
     case T_POW:
         return 70;
@@ -228,7 +228,7 @@ int get_infix_power(TokenType type) {
     }
 }
 
-bool is_infix_right_associative(TokenType type) {
+static bool is_infix_right_associative(TokenType type) {
     switch (type)
     {
     case T_POW:
@@ -238,19 +238,19 @@ bool is_infix_right_associative(TokenType type) {
     }
 }
 
-ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int min_power);
+static ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int min_power);
 
-ExprNode *_parse_identifier(Lexer *lexer, Arena *arena);
+static ExprNode *_parse_identifier(Lexer *lexer, Arena *arena);
 
-ExprNode *_parse_func(Lexer *lexer, Arena *arena);
+static ExprNode *_parse_func(Lexer *lexer, Arena *arena);
 
-ExprNode *_parse_if(Lexer *lexer, Arena *arena);
+static ExprNode *_parse_if(Lexer *lexer, Arena *arena);
 
-ExprNode *_parse_while(Lexer *lexer, Arena *arena);
+static ExprNode *_parse_while(Lexer *lexer, Arena *arena);
 
-ExprNode *_parse_return(Lexer *lexer, Arena *arena);
+static ExprNode *_parse_return(Lexer *lexer, Arena *arena);
 
-ExprNode *_parse_prefix(Lexer *lexer, Arena *arena) {
+static ExprNode *_parse_prefix(Lexer *lexer, Arena *arena) {
     if (!lexer_next_token(lexer)) return NULL;
 
     switch (lexer->token.type) {
@@ -287,7 +287,7 @@ ExprNode *_parse_prefix(Lexer *lexer, Arena *arena) {
     }
 }
 
-ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
+static ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
     ExprNode *left = _parse_prefix(lexer, arena);
     if (!left) return left;
 
@@ -340,13 +340,13 @@ rewind:
     return left;
 }
 
-ExprNode *parser_expression(Lexer *lexer, Arena *arena) { _parser_expression(lexer, arena, 0); }
+ExprNode *parser_parse_expression(Lexer *lexer, Arena *arena) { _parser_expression(lexer, arena, 0); }
 
-ExprNode *_parse_block(Lexer *lexer, Arena *arena, TokenType end) {
+static ExprNode *_parse_block(Lexer *lexer, Arena *arena, TokenType end) {
     ExprNode *block = node_block(arena);
     while (1) {
         Reader r = lexer_save_reader(lexer);
-        ExprNode *node = parser_expression(lexer, arena);
+        ExprNode *node = parser_parse_expression(lexer, arena);
         if (node == NULL) {
             if (lexer->token.type == end || lexer->token.type == T_END) {
                 lexer_rewind_reader(lexer, r);
@@ -363,7 +363,7 @@ ExprNode *_parse_block(Lexer *lexer, Arena *arena, TokenType end) {
     assert(0 && "Unreachable");
 }
 
-ExprNode *_parse_func(Lexer *lexer, Arena *arena) {
+static ExprNode *_parse_func(Lexer *lexer, Arena *arena) {
     lexer_expect_token(lexer, T_IDENTIFIER);
     ExprNode *func = node_func(arena, lexer->token.identifier_value);
     lexer_expect_token(lexer, T_OPAREN);
@@ -387,7 +387,7 @@ ExprNode *_parse_func(Lexer *lexer, Arena *arena) {
     return func;
 }
 
-ExprNode *_parse_identifier(Lexer *lexer, Arena *arena) {
+static ExprNode *_parse_identifier(Lexer *lexer, Arena *arena) {
     if (lexer_peek_next_char(lexer) != '(') {
         return node_identifier(arena, lexer->token.identifier_value);
     }
@@ -408,8 +408,8 @@ ExprNode *_parse_identifier(Lexer *lexer, Arena *arena) {
     return funcall;
 }
 
-ExprNode *_parse_if(Lexer *lexer, Arena *arena) {
-    ExprNode *condition_node = parser_expression(lexer, arena);
+static ExprNode *_parse_if(Lexer *lexer, Arena *arena) {
+    ExprNode *condition_node = parser_parse_expression(lexer, arena);
 
     lexer_expect_literal(lexer, ':');
 
@@ -426,8 +426,8 @@ ExprNode *_parse_if(Lexer *lexer, Arena *arena) {
     return node_if(arena, condition_node, then_node, else_node);
 }
 
-ExprNode *_parse_while(Lexer *lexer, Arena *arena) {
-    ExprNode *condition = parser_expression(lexer, arena);
+static ExprNode *_parse_while(Lexer *lexer, Arena *arena) {
+    ExprNode *condition = parser_parse_expression(lexer, arena);
 
     lexer_expect_literal(lexer, ':');
 
@@ -437,17 +437,17 @@ ExprNode *_parse_while(Lexer *lexer, Arena *arena) {
     return node_while(arena, condition, body);
 }
 
-ExprNode *_parse_return(Lexer *lexer, Arena *arena) {
-    ExprNode *ret = parser_expression(lexer, arena);
+static ExprNode *_parse_return(Lexer *lexer, Arena *arena) {
+    ExprNode *ret = parser_parse_expression(lexer, arena);
     return node_return(arena, ret);
 }
 
-void print_ws(int depth) {
+static void print_ws(int depth) {
     for (size_t i = 0; i < depth; i++)
         printf("  ");
 }
 
-void _print_expression(ExprNode *expr, int depth) {
+static void _print_expression(ExprNode *expr, int depth) {
     print_ws(depth);
     switch (expr->type) {
     case P_NUMBER:
@@ -517,6 +517,7 @@ void _print_expression(ExprNode *expr, int depth) {
         assert(0 && "Not implemented expr type");
     }
 }
+
 void parser_print_expression(ExprNode *expr) {
     if (!expr) return;
     _print_expression(expr, 0);

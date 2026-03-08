@@ -22,7 +22,7 @@ int interpret(int argc, char** argv) {
     Interpreter interpreter = interpreter_create(&arena, &temp_arena);
 
     while (1) {
-        ExprNode* expr = parser_expression(&lexer, &arena);
+        ExprNode* expr = parser_parse_expression(&lexer, &arena);
         if (expr == NULL) {
             if (lexer_is_eof(&lexer)) break;
             continue;
@@ -62,7 +62,7 @@ int compile(int argc, char** argv) {
     Arena arena = arena_create(4 * 1024);
 
     while (1) {
-        ExprNode* expr = parser_expression(&lexer, &arena);
+        ExprNode* expr = parser_parse_expression(&lexer, &arena);
         if (expr == NULL) {
             if (lexer_is_eof(&lexer)) break;
             continue;
