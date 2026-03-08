@@ -1,14 +1,19 @@
-#ifndef __FASM_X86_COMPILER_H_INCLUDED__
-#define __FASM_X86_COMPILER_H_INCLUDED__
+#ifndef __ASM_COMPILER_H_INCLUDED__
+#define __ASM_COMPILER_H_INCLUDED__
 
 #include "../parser.h"
 #include "../utils/arena.h"
+
+#ifndef ASM_WORD_SIZE
+#define ASM_WORD_SIZE "8"
+#endif
 
 typedef struct {
     ExprNode *expr;
     size_t stack_index;
     const char *reg;
     const char *address;
+    const char *identifier;
 } CNode;
 
 typedef struct {
@@ -50,7 +55,7 @@ typedef struct {
     CBlock main;
     CScope main_scope;
 
-    CData data;
+    CVarMap *data;
 } AsmCompiler;
 
 AsmCompiler asm_compiler_create();
@@ -60,10 +65,10 @@ void asm_compiler_append_expression(AsmCompiler *c, ExprNode *expr);
 void asm_compiler_generate_assembly(AsmCompiler *c);
 bool asm_compiler_compile(AsmCompiler *c, const char *object_output_path);
 
-#endif // __FASM_X86_COMPILER_H_INCLUDED__
+#endif // __ASM_COMPILER_H_INCLUDED__
 
-#ifndef __FASM_X86_COMPILER_H_IMP__
-#define __FASM_X86_COMPILER_H_IMP__
+#ifndef __ASM_COMPILER_IMP__
+#define __ASM_COMPILER_IMP__
 
 static const char *ARG_REGS[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 
@@ -102,11 +107,12 @@ void asm_compiler_destroy(AsmCompiler *c) {
     cscope_destroy(&c->main_scope);
     da_destroy(&c->external_funcs);
     da_destroy(&c->main);
-    da_destroy(&c->data);
+    shfree(c->data);
+    c->data = NULL;
 }
 
 bool asm_compiler_init(AsmCompiler *c, const char *build_folder) {
-    c->asm_file_path = arena_strjoin(&c->allocator, build_folder, "fasm_x86_out.asm");
+    c->asm_file_path = arena_strjoin(&c->allocator, build_folder, "output.asm");
     c->asm_file = file_create(c->asm_file_path);
 
     const char *fasm_entry = "format ELF64\n"
@@ -177,6 +183,13 @@ void asm_compiler_generate_assembly(AsmCompiler *c) {
         asm_fwrite(c, &c->allocator, 0, "extrn %s\n", c->external_funcs.items[i]);
     }
 
+    asm_write(c, 0, "\n; Data section\n");
+    asm_write(c, 0, "section '.data'\n");
+    for (size_t i = 0; i < shlen(c->data); i++) {
+        CNode *value = c->data[i].value;
+        asm_fwrite(c, &c->allocator, 1, "%s db \"%s\",0\n", value->identifier, value->expr->scape_string_value);
+    }
+
     asm_write(c, 0, "\n");
 
     fclose(c->asm_file);
@@ -199,6 +212,14 @@ bool asm_compiler_compile(AsmCompiler *c, const char *object_output_path) {
     return ret == 0;
 }
 
+static void fetch_node(AsmCompiler *c, Arena *a, int depth, const char *reg, CNode *node) {
+    if (node->address) {
+        asm_fwrite(c, a, depth, "mov %s, %s\n", reg, node->address);
+    } else if (strcmp(node->reg, reg) != 0) {
+        asm_fwrite(c, a, depth, "mov %s, %s\n", reg, node->reg);
+    }
+}
+
 static void cscope_assign(AsmCompiler *c, CScope *s, CNode *identifier, CNode *value, Arena *a, int depth) {
     assert(identifier->expr && identifier->expr->type == P_IDENTIFIER);
 
@@ -208,26 +229,19 @@ static void cscope_assign(AsmCompiler *c, CScope *s, CNode *identifier, CNode *v
         asm_fwrite(c, a, depth, "mov %s, %s\n", var->reg, value->reg);
     } else {
         identifier->stack_index = ++s->count;
-        asm_fwrite(c, a, depth, "push %s\n", value->reg);
+        fetch_node(c, a, depth, "rax", value);
+        asm_write(c, depth, "push rax\n");
 
-        identifier->address = arena_strformat(a, "[rbp - 8*%d]", identifier->stack_index);
+        identifier->address = arena_strformat(a, "[rbp - " ASM_WORD_SIZE "*%d]", identifier->stack_index);
         identifier->reg = identifier->address;
         shput(s->vars, identifier->expr->string_value, identifier);
-    }
-}
-
-static void fetch_node(AsmCompiler *c, Arena *a, int depth, const char *reg, CNode *node) {
-    if (node->address) {
-        asm_fwrite(c, a, depth, "mov %s, %s\n", reg, node->address);
-    } else if (strcmp(node->reg, reg) != 0) {
-        asm_fwrite(c, a, depth, "mov %s, %s\n", reg, node->reg);
     }
 }
 
 CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena *a, int depth) {
     switch (expr->type) {
     case P_NUMBER: {
-        // TODO: add suport to float
+        // TODO: add support to float
         CNode *node = node_create(a, expr);
         node->reg = "rcx";
         asm_fwrite(c, a, depth, "mov %s, %d\n", node->reg, (int)expr->number_value);
@@ -342,7 +356,8 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         assert(expr->args.count <= 6); // TODO: ADD SUPORT TO MORE ARGS
         for (size_t i = 0; i < expr->args.count; i++) {
             CNode *arg = _compile_expression(c, scope, expr->args.items[i], a, depth);
-            asm_fwrite(c, a, depth, "push %s\n", arg->reg);
+            fetch_node(c, a, depth, "rax", arg);
+            asm_write(c, depth, "push rax\n");
         }
 
         for (int i = expr->args.count - 1; i >= 0; i--) {
@@ -377,8 +392,23 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         result->reg = value->reg;
         return result;
     }
+    case P_STRING: {
+        CNode *existing = shget(c->data, expr->string_value);
+        CNode *value = node_create(a, expr);
+
+        if (existing) {
+            value->address = existing->address;
+            value->reg = existing->address;
+        } else {
+            shput(c->data, expr->string_value, value);
+            value->identifier = arena_strformat(a, "dat_%d", shlen(c->data));
+            value->address = arena_strformat(a, "%s", value->identifier);
+            value->reg = value->address;
+        }
+
+        return value;
+    }
     case P_CHAR:
-    case P_STRING:
     case P_BINOP:
     case P_DIV:
     case P_POW:

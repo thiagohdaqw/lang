@@ -48,8 +48,10 @@ typedef struct token {
     char identifier_value[IDENTIFIER_MAX_LENGTH + 1];
     int identifier_size;
 
-    char string_value[STRING_MAX_LENGTH + 1];
     int string_size;
+    char string_value[STRING_MAX_LENGTH + 1];
+    int scape_string_size;
+    char scape_string_value[STRING_MAX_LENGTH + 1];
 } Token;
 
 typedef struct reader {
@@ -180,10 +182,16 @@ static bool parse_string(Lexer *lexer) {
         if (value == '"') {
             break;
         }
+        char scaped_value = value;
+
         if (value == '\\') {
             if (lexer_peek_next_char(lexer) == 'n') {
                 next_char(lexer);
                 value = '\n';
+
+                assert(lexer->token.scape_string_size + 1 < STRING_MAX_LENGTH);
+                lexer->token.scape_string_value[lexer->token.scape_string_size++] = '\\';
+                scaped_value = 'n';
             }
         }
 
@@ -192,6 +200,7 @@ static bool parse_string(Lexer *lexer) {
             return false;
         }
         lexer->token.string_value[lexer->token.string_size++] = value;
+        lexer->token.scape_string_value[lexer->token.scape_string_size++] = scaped_value;
     }
 
     lexer->token.string_value[lexer->token.string_size] = '\0';

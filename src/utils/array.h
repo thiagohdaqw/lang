@@ -21,5 +21,6 @@
 #define da_destroy(list)                                                                                               \
     do {                                                                                                               \
         if ((list)->items) free((list)->items);                                                                        \
+        (list)->items = NULL;                                                                                          \
     } while (0)
 #endif

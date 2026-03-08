@@ -1,6 +1,3 @@
-a = 1 * 2
-a = a * 3
-a = a * 4
-a = a * 5
-b = a + 1
-retorne a
+a = "hello world\n"
+write(1, a, strlen(a))
+retorne 0

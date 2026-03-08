@@ -40,6 +40,7 @@ typedef struct op_node_t {
     double number_value;
     char char_value;
     char *string_value;
+    char *scape_string_value;
 
     bool returned;
 
@@ -132,10 +133,11 @@ ExprNode *node_assign(Arena *a, ExprNode *left, ExprNode *right) {
     return node;
 }
 
-ExprNode *node_string(Arena *a, const char *value) {
+ExprNode *node_string(Arena *a, const char *value, const char *scape_value) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->type = P_STRING;
     node->string_value = arena_strdup(a, value);
+    node->scape_string_value = arena_strdup(a, scape_value);
     return node;
 }
 
@@ -268,7 +270,7 @@ static ExprNode *_parse_prefix(Lexer *lexer, Arena *arena) {
     case T_DOUBLE:
         return node_number(arena, lexer->token.double_value);
     case T_STRING:
-        return node_string(arena, lexer->token.string_value);
+        return node_string(arena, lexer->token.string_value, lexer->token.scape_string_value);
     case T_IDENTIFIER:
         return _parse_identifier(lexer, arena);
     case T_FUNC:
