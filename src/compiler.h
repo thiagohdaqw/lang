@@ -1,7 +1,7 @@
 #ifndef __COMPILER_H_INCLUDED__
 #define __COMPILER_H_INCLUDED__
 
-#include "compilers/asm_compiler.h"
+#include "asm_compiler.h"
 #include "parser.h"
 
 typedef enum {

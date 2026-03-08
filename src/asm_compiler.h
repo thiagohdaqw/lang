@@ -1,8 +1,8 @@
 #ifndef __ASM_COMPILER_H_INCLUDED__
 #define __ASM_COMPILER_H_INCLUDED__
 
-#include "../parser.h"
-#include "../utils/arena.h"
+#include "parser.h"
+#include "utils/arena.h"
 
 #ifndef ASM_WORD_SIZE
 #define ASM_WORD_SIZE "8"
