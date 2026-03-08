@@ -84,7 +84,25 @@ FX8664Compiler fasm_x86_64_compiler_create() {
     return compiler;
 }
 
-void fasm_x86_64_compiler_destroy(FX8664Compiler *c) { arena_destroy(&c->allocator); }
+static CScope cscope_create() {
+    CScope scope = {0};
+    return scope;
+}
+
+static void cscope_destroy(CScope *s) {
+    if (s->vars) {
+        shfree(s->vars);
+        s->vars = NULL;
+    }
+}
+
+void fasm_x86_64_compiler_destroy(FX8664Compiler *c) {
+    arena_destroy(&c->allocator);
+    cscope_destroy(&c->main_scope);
+    da_destroy(&c->external_funcs);
+    da_destroy(&c->main);
+    da_destroy(&c->data);
+}
 
 bool fasm_x86_64_compiler_init(FX8664Compiler *c, const char *build_folder) {
     c->asm_file_path = arena_strjoin(&c->allocator, build_folder, "fasm_x86_out.asm");
@@ -105,18 +123,6 @@ void fasm_x86_64_compiler_append_expression(FX8664Compiler *c, ExprNode *expr) {
     }
 
     da_append(&c->main, expr);
-}
-
-static CScope cscope_create() {
-    CScope scope = {0};
-    return scope;
-}
-
-static void cscope_destroy(CScope *s) {
-    if (s->vars) {
-        shfree(s->vars);
-        s->vars = NULL;
-    }
 }
 
 static CNode *node_create(Arena *a, ExprNode *expr) {
@@ -299,6 +305,8 @@ CNode *_compile_expression(FX8664Compiler *c, CScope *scope, ExprNode *expr, Are
         asm_write(c, depth + 1, "pop rbp\n");
         asm_write(c, depth + 1, "ret\n");
         asm_fwrite(c, a, depth + 1, "; END func_%s\n\n", expr->string_value);
+
+        cscope_destroy(&func_scope);
         break;
     }
     case P_FUNC_CALL: {
