@@ -141,6 +141,14 @@ static CNode *node_create(Arena *a, ExprNode *expr) {
     return node;
 }
 
+static void fetch_node(AsmCompiler *c, Arena *a, int depth, const char *reg, CNode *node) {
+    if (node->address) {
+        asm_fwrite(c, a, depth, "mov %s, %s\n", reg, node->address);
+    } else if (strcmp(node->reg, reg) != 0) {
+        asm_fwrite(c, a, depth, "mov %s, %s\n", reg, node->reg);
+    }
+}
+
 static CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena *a, int depth);
 
 void asm_compiler_generate_assembly(AsmCompiler *c) {
@@ -158,7 +166,7 @@ void asm_compiler_generate_assembly(AsmCompiler *c) {
         ExprNode *current = c->main.items[i];
         if (current->type == P_RETURN) {
             CNode *child = _compile_expression(c, &c->main_scope, current->first, &c->allocator, 1);
-            asm_fwrite(c, &c->allocator, 1, "mov rax, %s\n", child->reg);
+            fetch_node(c, &c->allocator, 1, "rax", child);
             asm_fwrite(c, &c->allocator, 1, "jmp pypt_main_ret\n");
             result = node_create(&c->allocator, current);
             continue;
@@ -167,7 +175,7 @@ void asm_compiler_generate_assembly(AsmCompiler *c) {
     }
 
     if (result && result->expr->type != P_RETURN) {
-        asm_fwrite(c, &c->allocator, 1, "mov rax, %s\n", result->reg);
+        fetch_node(c, &c->allocator, 1, "rax", result);
         asm_fwrite(c, &c->allocator, 1, "jmp pypt_main_ret\n");
     }
 
@@ -199,6 +207,7 @@ void _generate_func_section(AsmCompiler *c) {
 void _generate_data_section(AsmCompiler *c) {
     asm_write(c, 0, "\n; Data section\n");
     asm_write(c, 0, "section '.data'\n");
+
     for (size_t i = 0; i < shlen(c->data); i++) {
         CNode *item = c->data[i].value;
         assert(item->identifier);
@@ -242,14 +251,6 @@ bool asm_compiler_compile(AsmCompiler *c, const char *object_output_path) {
     arena_rewind(&c->allocator, saved);
 
     return ret == 0;
-}
-
-static void fetch_node(AsmCompiler *c, Arena *a, int depth, const char *reg, CNode *node) {
-    if (node->address) {
-        asm_fwrite(c, a, depth, "mov %s, %s\n", reg, node->address);
-    } else if (strcmp(node->reg, reg) != 0) {
-        asm_fwrite(c, a, depth, "mov %s, %s\n", reg, node->reg);
-    }
 }
 
 static void cscope_assign(AsmCompiler *c, CScope *s, CNode *identifier, CNode *value, Arena *a, int depth) {
@@ -350,7 +351,7 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
             ExprNode *current = block_node->items[i];
             if (current->type == P_RETURN) {
                 CNode *child = _compile_expression(c, &func_scope, current->first, a, depth + 1);
-                asm_fwrite(c, a, depth + 1, "mov rax, %s\n", child->reg);
+                fetch_node(c, a, depth + 1, "rax", child);
                 asm_fwrite(c, a, depth + 1, "jmp func_ret_%s\n", expr->string_value);
                 last = node_create(a, current);
                 continue;
@@ -360,7 +361,7 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
 
         if (last && last->expr->type != P_RETURN) {
             assert(last->reg);
-            asm_fwrite(c, a, depth + 1, "mov rax, %s\n", last->reg);
+            fetch_node(c, a, depth + 1, "rax", last);
         }
 
         asm_fwrite(c, a, depth, "func_ret_%s:\n", expr->string_value);
@@ -426,7 +427,7 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
     }
     case P_STRING: {
         CNode *existing = shget(c->data, expr->string_value);
-        
+
         if (existing) {
             CNode *value = node_create(a, expr);
             value->address = existing->address;
