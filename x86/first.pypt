@@ -1,4 +1,8 @@
-a = "Hello\nWorld\n"
-b = "Hello World\n"
-write(1, a, strlen(b))
+func hello():
+    retorne "hello world\n"
+fim
+
+r = hello()
+write(1, r, strlen(r))
+
 retorne 0

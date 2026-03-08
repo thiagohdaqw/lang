@@ -188,11 +188,11 @@ void asm_compiler_generate_assembly(AsmCompiler *c) {
 
 void _generate_func_section(AsmCompiler *c) {
     for (size_t i = 0; i < c->funcs.count; i++) {
-        ArenaNode saved = arena_save(&c->allocator);
+        // ArenaNode saved = arena_save(&c->allocator);
 
         _compile_expression(c, &c->main_scope, c->funcs.items[i], &c->allocator, 0);
 
-        arena_rewind(&c->allocator, saved);
+        // arena_rewind(&c->allocator, saved);
     }
 }
 
@@ -200,10 +200,12 @@ void _generate_data_section(AsmCompiler *c) {
     asm_write(c, 0, "\n; Data section\n");
     asm_write(c, 0, "section '.data'\n");
     for (size_t i = 0; i < shlen(c->data); i++) {
-        CNode *value = c->data[i].value;
-        asm_fwrite(c, &c->allocator, 1, "%s db \"", value->identifier);
+        CNode *item = c->data[i].value;
+        assert(item->identifier);
 
-        char *start = value->expr->string_value;
+        asm_fwrite(c, &c->allocator, 1, "%s db \"", item->identifier);
+
+        char *start = item->expr->string_value;
         for (char *buffer = start; *buffer != '\0'; buffer++) {
             if (*buffer == '\n') {
                 asm_fwrite(c, &c->allocator, 0, "%.*s\",10,\"", buffer - start, start);
@@ -424,19 +426,20 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
     }
     case P_STRING: {
         CNode *existing = shget(c->data, expr->string_value);
-        CNode *value = node_create(a, expr);
-
+        
         if (existing) {
+            CNode *value = node_create(a, expr);
             value->address = existing->address;
             value->reg = existing->address;
+            return value;
         } else {
-            shput(c->data, expr->string_value, value);
+            CNode *value = node_create(a, expr);
             value->identifier = arena_strformat(a, "dat_%d", shlen(c->data));
-            value->address = arena_strformat(a, "%s", value->identifier);
+            value->address = value->identifier;
             value->reg = value->address;
+            shput(c->data, expr->string_value, value);
+            return value;
         }
-
-        return value;
     }
     case P_CHAR:
     case P_BINOP:
