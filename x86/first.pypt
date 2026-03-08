@@ -1,5 +1,5 @@
 func soma(a, b):
-    retorne a + b
+    retorne exit(69)
 fim
 
 retorne soma(10, 5)

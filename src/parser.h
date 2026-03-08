@@ -18,7 +18,7 @@ typedef enum {
     P_MULT,
     P_POW,
     P_FUNC,
-    P_FUN_CALL,
+    P_FUNC_CALL,
     P_BLOCK,
     P_IF,
     P_WHILE,
@@ -145,7 +145,7 @@ ExprNode *node_funcall(Arena *a, const char *identifier) {
     node->args.items = NULL;
     node->args.capacity = 0;
     node->args.count = 0;
-    node->type = P_FUN_CALL;
+    node->type = P_FUNC_CALL;
     return node;
 }
 
@@ -456,7 +456,7 @@ void _print_expression(ExprNode *expr, int depth) {
     case P_IDENTIFIER:
         printf("ID(%s)", expr->string_value);
         break;
-    case P_FUN_CALL:
+    case P_FUNC_CALL:
         printf("FUNCALL(%s,\n", expr->string_value);
         for (size_t i = 0; i < expr->args.count; i++) {
             print_ws(depth);

@@ -121,16 +121,14 @@ void compiler_compile(Compiler *c) {
         assert(0 && "Compiler type not implemented");
     }
 
-    // TOOD: create a arena_printf
-    char *compile_command = arena_strjoin(&c->allocator, "gcc ", c->c_args);
-    compile_command = arena_strjoin(&c->allocator, compile_command, " ");
-    compile_command = arena_strjoin(&c->allocator, compile_command, c->entry_path);
-    compile_command = arena_strjoin(&c->allocator, compile_command, " ");
-    compile_command = arena_strjoin(&c->allocator, compile_command, output_object_path);
-    compile_command = arena_strjoin(&c->allocator, compile_command, " -o ");
-    compile_command = arena_strjoin(&c->allocator, compile_command, c->output_executable_path);
-    compile_command = arena_strjoin(&c->allocator, compile_command, " ");
-    compile_command = arena_strjoin(&c->allocator, compile_command, c->linker_args);
+    char *compile_command = arena_strformat(&c->allocator,
+        "gcc -no-pie %s %s %s -o %s %s",
+        c->c_args,
+        c->entry_path,
+        output_object_path,
+        c->output_executable_path,
+        c->linker_args
+    );
 
     printf("Executing: %s\n", compile_command);
     int ret = system(compile_command);

@@ -33,11 +33,18 @@ typedef struct {
 } CData;
 
 typedef struct {
+    char **items;
+    int capacity;
+    int count;
+} CExternalFuncs;
+
+typedef struct {
     Arena allocator;
 
     const char *asm_file_path;
     FILE *asm_file;
 
+    CExternalFuncs external_funcs;
     CBlock funcs;
     CBlock main;
     CScope main_scope;
@@ -148,8 +155,6 @@ void fasm_x86_64_compiler_generate_assembly(FX8664Compiler *c) {
         result = _compile_expression(c, &c->main_scope, current, &c->allocator, 1);
     }
 
-    arena_rewind(&c->allocator, saved);
-
     if (result && result->expr->type != P_RETURN) {
         asm_fwrite(c, &c->allocator, 1, "mov rax, %s\n", result->reg);
         asm_fwrite(c, &c->allocator, 1, "jmp pypt_main_ret\n");
@@ -158,9 +163,17 @@ void fasm_x86_64_compiler_generate_assembly(FX8664Compiler *c) {
     asm_write(c, 0, "pypt_main_ret:\n");
     asm_write(c, 1, "mov rsp, rbp\n");
     asm_write(c, 1, "pop rbp\n");
-    asm_write(c, 1, "ret\n");
+    asm_write(c, 1, "ret\n\n");
+
+    asm_write(c, 0, "; External funcs\n");
+    for (size_t i = 0; i < c->external_funcs.count; i++) {
+        asm_fwrite(c, &c->allocator, 0, "extrn %s\n", c->external_funcs.items[i]);
+    }
+
+    asm_write(c, 0, "\n");
 
     fclose(c->asm_file);
+    arena_rewind(&c->allocator, saved);
 }
 
 bool fasm_x86_64_compiler_compile(FX8664Compiler *c, const char *object_output_path) {
@@ -288,9 +301,20 @@ CNode *_compile_expression(FX8664Compiler *c, CScope *scope, ExprNode *expr, Are
         asm_fwrite(c, a, depth + 1, "; END func_%s\n\n", expr->string_value);
         break;
     }
-    case P_FUN_CALL: {
-        assert(expr->args.count <= 6); // TODO: ADD SUPORT TO MORE ARGS
+    case P_FUNC_CALL: {
+        bool func_exists = false;
+        for (size_t i = 0; i < c->funcs.count; i++) {
+            if (strcmp(expr->string_value, c->funcs.items[i]->string_value) == 0) {
+                func_exists = true;
+                break;
+            }
+        }
 
+        if (!func_exists) {
+            da_append(&c->external_funcs, expr->string_value);
+        }
+
+        assert(expr->args.count <= 6); // TODO: ADD SUPORT TO MORE ARGS
         for (size_t i = 0; i < expr->args.count; i++) {
             CNode *arg = _compile_expression(c, scope, expr->args.items[i], a, depth);
             asm_fwrite(c, a, depth, "push %s\n", arg->reg);
@@ -300,7 +324,11 @@ CNode *_compile_expression(FX8664Compiler *c, CScope *scope, ExprNode *expr, Are
             asm_fwrite(c, a, depth, "pop %s\n", ARG_REGS[i]);
         }
 
-        asm_fwrite(c, a, depth, "call func_%s\n", expr->string_value);
+        if (func_exists) {
+            asm_fwrite(c, a, depth, "call func_%s\n", expr->string_value);
+        } else {
+            asm_fwrite(c, a, depth, "call %s\n", expr->string_value);
+        }
 
         CNode *result = node_create(a, expr);
         result->reg = "rax";

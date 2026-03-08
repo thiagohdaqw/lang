@@ -342,7 +342,7 @@ bool lexer_next_token(Lexer *lexer) {
     if (isdigit(get_char(lexer))) {
         return parse_number(lexer, 1);
     }
-    if (isalnum(get_char(lexer))) {
+    if (isalpha(get_char(lexer)) || get_char(lexer) == '_') {
         return parse_identifier(lexer);
     }
     if (get_char(lexer) == '\'') {

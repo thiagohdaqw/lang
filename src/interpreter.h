@@ -253,7 +253,7 @@ ExprNode *_eval(Interpreter *interpreter, IScope *scope, ExprNode *expr, Arena *
         return _eval_identifier(interpreter, scope, expr, a);
     case P_ASSIGN:
         return _eval_assign(interpreter, scope, expr, a);
-    case P_FUN_CALL:
+    case P_FUNC_CALL:
         return _eval_funcall(interpreter, scope, expr, a);
     case P_IF:
         return _eval_if(interpreter, scope, expr, a);
