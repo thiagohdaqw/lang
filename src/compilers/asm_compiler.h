@@ -8,6 +8,7 @@ typedef struct {
     ExprNode *expr;
     size_t stack_index;
     const char *reg;
+    const char *address;
 } CNode;
 
 typedef struct {
@@ -50,14 +51,14 @@ typedef struct {
     CScope main_scope;
 
     CData data;
-} FX8664Compiler;
+} AsmCompiler;
 
-FX8664Compiler fasm_x86_64_compiler_create();
-bool fasm_x86_64_compiler_init(FX8664Compiler *c, const char *build_folder);
-void fasm_x86_64_compiler_destroy(FX8664Compiler *c);
-void fasm_x86_64_compiler_append_expression(FX8664Compiler *c, ExprNode *expr);
-void fasm_x86_64_compiler_generate_assembly(FX8664Compiler *c);
-bool fasm_x86_64_compiler_compile(FX8664Compiler *c, const char *object_output_path);
+AsmCompiler asm_compiler_create();
+bool asm_compiler_init(AsmCompiler *c, const char *build_folder);
+void asm_compiler_destroy(AsmCompiler *c);
+void asm_compiler_append_expression(AsmCompiler *c, ExprNode *expr);
+void asm_compiler_generate_assembly(AsmCompiler *c);
+bool asm_compiler_compile(AsmCompiler *c, const char *object_output_path);
 
 #endif // __FASM_X86_COMPILER_H_INCLUDED__
 
@@ -73,13 +74,13 @@ static const char *ARG_REGS[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
     write_spaces(c, (d));                                                                                              \
     file_write((c)->asm_file, arena_strformat((a), f, ##__VA_ARGS__));
 
-void write_spaces(FX8664Compiler *c, int depth) {
+void write_spaces(AsmCompiler *c, int depth) {
     for (size_t i = 0; i < depth; i++)
         file_write(c->asm_file, "    ");
 }
 
-FX8664Compiler fasm_x86_64_compiler_create() {
-    FX8664Compiler compiler = {0};
+AsmCompiler asm_compiler_create() {
+    AsmCompiler compiler = {0};
     compiler.allocator = arena_create(4 * 1024);
     return compiler;
 }
@@ -96,7 +97,7 @@ static void cscope_destroy(CScope *s) {
     }
 }
 
-void fasm_x86_64_compiler_destroy(FX8664Compiler *c) {
+void asm_compiler_destroy(AsmCompiler *c) {
     arena_destroy(&c->allocator);
     cscope_destroy(&c->main_scope);
     da_destroy(&c->external_funcs);
@@ -104,7 +105,7 @@ void fasm_x86_64_compiler_destroy(FX8664Compiler *c) {
     da_destroy(&c->data);
 }
 
-bool fasm_x86_64_compiler_init(FX8664Compiler *c, const char *build_folder) {
+bool asm_compiler_init(AsmCompiler *c, const char *build_folder) {
     c->asm_file_path = arena_strjoin(&c->allocator, build_folder, "fasm_x86_out.asm");
     c->asm_file = file_create(c->asm_file_path);
 
@@ -116,7 +117,7 @@ bool fasm_x86_64_compiler_init(FX8664Compiler *c, const char *build_folder) {
     return true;
 }
 
-void fasm_x86_64_compiler_append_expression(FX8664Compiler *c, ExprNode *expr) {
+void asm_compiler_append_expression(AsmCompiler *c, ExprNode *expr) {
     if (expr->type == P_FUNC) {
         da_append(&c->funcs, expr);
         return;
@@ -131,9 +132,9 @@ static CNode *node_create(Arena *a, ExprNode *expr) {
     return node;
 }
 
-static CNode *_compile_expression(FX8664Compiler *c, CScope *scope, ExprNode *expr, Arena *a, int depth);
+static CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena *a, int depth);
 
-void fasm_x86_64_compiler_generate_assembly(FX8664Compiler *c) {
+void asm_compiler_generate_assembly(AsmCompiler *c) {
     for (size_t i = 0; i < c->funcs.count; i++) {
         ArenaNode saved = arena_save(&c->allocator);
 
@@ -182,7 +183,7 @@ void fasm_x86_64_compiler_generate_assembly(FX8664Compiler *c) {
     arena_rewind(&c->allocator, saved);
 }
 
-bool fasm_x86_64_compiler_compile(FX8664Compiler *c, const char *object_output_path) {
+bool asm_compiler_compile(AsmCompiler *c, const char *object_output_path) {
     ArenaNode saved = arena_save(&c->allocator);
 
     const char *fasm_command = arena_strjoin(&c->allocator, "fasm ", c->asm_file_path);
@@ -198,22 +199,32 @@ bool fasm_x86_64_compiler_compile(FX8664Compiler *c, const char *object_output_p
     return ret == 0;
 }
 
-void cscope_assign(FX8664Compiler *c, CScope *s, const char *key, CNode *value, Arena *a, int depth) {
-    CNode *var = shget(s->vars, key);
+static void cscope_assign(AsmCompiler *c, CScope *s, CNode *identifier, CNode *value, Arena *a, int depth) {
+    assert(identifier->expr && identifier->expr->type == P_IDENTIFIER);
+
+    CNode *var = shget(s->vars, identifier->expr->string_value);
 
     if (var) {
-        var->reg = value->reg;
-        asm_fwrite(c, a, depth, "mov [rbp + 8*%d], %s\n", var->stack_index, value->reg);
+        asm_fwrite(c, a, depth, "mov %s, %s\n", var->reg, value->reg);
     } else {
-        value->stack_index = ++s->count;
-
-        shput(s->vars, key, value);
-
+        identifier->stack_index = ++s->count;
         asm_fwrite(c, a, depth, "push %s\n", value->reg);
+
+        identifier->address = arena_strformat(a, "[rbp - 8*%d]", identifier->stack_index);
+        identifier->reg = identifier->address;
+        shput(s->vars, identifier->expr->string_value, identifier);
     }
 }
 
-CNode *_compile_expression(FX8664Compiler *c, CScope *scope, ExprNode *expr, Arena *a, int depth) {
+static void fetch_node(AsmCompiler *c, Arena *a, int depth, const char *reg, CNode *node) {
+    if (node->address) {
+        asm_fwrite(c, a, depth, "mov %s, %s\n", reg, node->address);
+    } else if (strcmp(node->reg, reg) != 0) {
+        asm_fwrite(c, a, depth, "mov %s, %s\n", reg, node->reg);
+    }
+}
+
+CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena *a, int depth) {
     switch (expr->type) {
     case P_NUMBER: {
         // TODO: add suport to float
@@ -238,26 +249,32 @@ CNode *_compile_expression(FX8664Compiler *c, CScope *scope, ExprNode *expr, Are
         asm_fwrite(c, a, depth, "neg %s\n", child->reg);
         return result;
     }
-    case P_MULT: {
-        CNode *first_child = _compile_expression(c, scope, expr->first, a, depth);
-        asm_fwrite(c, a, depth, "push %s\n", first_child->reg);
-        CNode *second_child = _compile_expression(c, scope, expr->second, a, depth);
-        asm_fwrite(c, a, depth, "push %s\n", second_child->reg);
-        asm_write(c, depth, "pop rcx\n");
-        asm_write(c, depth, "pop rdx\n");
-        asm_write(c, depth, "imul rcx, rdx\n");
-        CNode *result = node_create(a, expr);
-        result->reg = "rcx";
-        return result;
-    }
+    case P_MULT:
     case P_PLUS: {
         CNode *first_child = _compile_expression(c, scope, expr->first, a, depth);
-        asm_fwrite(c, a, depth, "push %s\n", first_child->reg);
+        if (!first_child->address) {
+            asm_fwrite(c, a, depth, "push %s\n", first_child->reg);
+        }
         CNode *second_child = _compile_expression(c, scope, expr->second, a, depth);
-        asm_fwrite(c, a, depth, "push %s\n", second_child->reg);
-        asm_write(c, depth, "pop rcx\n");
-        asm_write(c, depth, "pop rdx\n");
-        asm_write(c, depth, "add rcx, rdx\n");
+
+        fetch_node(c, a, depth, "rcx", second_child);
+
+        if (!first_child->address) {
+            asm_fwrite(c, a, depth, "pop rdx\n");
+        } else {
+            fetch_node(c, a, depth, "rdx", first_child);
+        }
+
+        switch (expr->type) {
+        case P_MULT:
+            asm_write(c, depth, "imul rcx, rdx\n");
+            break;
+        case P_PLUS:
+            asm_write(c, depth, "add rcx, rdx\n");
+            break;
+        default:
+            assert(0 && "op not implemented");
+        }
         CNode *result = node_create(a, expr);
         result->reg = "rcx";
         return result;
@@ -278,7 +295,7 @@ CNode *_compile_expression(FX8664Compiler *c, CScope *scope, ExprNode *expr, Are
             CNode *arg_node = node_create(a, arg);
             arg_node->reg = ARG_REGS[i];
 
-            cscope_assign(c, &func_scope, arg->string_value, arg_node, a, depth + 1);
+            cscope_assign(c, &func_scope, arg_node, arg_node, a, depth + 1);
         }
 
         CNode *last = NULL;
@@ -345,18 +362,16 @@ CNode *_compile_expression(FX8664Compiler *c, CScope *scope, ExprNode *expr, Are
     case P_IDENTIFIER: {
         CNode *var = shget(scope->vars, expr->string_value);
         if (!var) {
-            fprintf(stderr, "Variable %s not found", expr->string_value);
+            fprintf(stderr, "Variable '%s' not found\n", expr->string_value);
             assert(var);
         }
-        var->reg = "rax";
-        asm_fwrite(c, a, depth, "mov %s, [rbp - 8*%d]\n", var->reg, var->stack_index);
         return var;
     }
     case P_ASSIGN: {
         CNode *value = _compile_expression(c, scope, expr->second, a, depth);
 
         assert(expr->first->type == P_IDENTIFIER);
-        cscope_assign(c, scope, expr->first->string_value, value, a, depth);
+        cscope_assign(c, scope, node_create(a, expr->first), value, a, depth);
 
         CNode *result = node_create(a, expr);
         result->reg = value->reg;

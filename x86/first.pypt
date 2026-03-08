@@ -1,5 +1,6 @@
-func soma(a, b):
-    retorne exit(69)
-fim
-
-retorne soma(10, 5)
+a = 1 * 2
+a = a * 3
+a = a * 4
+a = a * 5
+b = a + 1
+retorne a

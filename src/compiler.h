@@ -1,17 +1,17 @@
 #ifndef __COMPILER_H_INCLUDED__
 #define __COMPILER_H_INCLUDED__
 
-#include "compilers/fasm_x86_64_compiler.h"
+#include "compilers/asm_compiler.h"
 #include "parser.h"
 
 typedef enum {
     NONE,
-    FX86,
+    ASM,
 } CompilerTypes;
 
 typedef struct {
     CompilerTypes type;
-    FX8664Compiler fx86_compiler;
+    AsmCompiler asm_compiler;
 
     Arena allocator;
     const char *build_folder;
@@ -48,8 +48,8 @@ Compiler compiler_create(CompilerTypes type, const char *build_folder, const cha
     c.allocator = arena_create(4 * 1024);
 
     switch (type) {
-    case FX86:
-        c.fx86_compiler = fasm_x86_64_compiler_create();
+    case ASM:
+        c.asm_compiler = asm_compiler_create();
         break;
     default:
         assert(0 && "Compiler type not implemented");
@@ -61,8 +61,8 @@ Compiler compiler_create(CompilerTypes type, const char *build_folder, const cha
 void compiler_destroy(Compiler *c) {
     arena_destroy(&c->allocator);
     switch (c->type) {
-    case FX86:
-        fasm_x86_64_compiler_destroy(&c->fx86_compiler);
+    case ASM:
+        asm_compiler_destroy(&c->asm_compiler);
         break;
     default:
         assert(0 && "Compiler type not implemented");
@@ -87,8 +87,8 @@ bool compiler_init(Compiler *c) {
     _create_c_entry(c);
 
     switch (c->type) {
-    case FX86:
-        return fasm_x86_64_compiler_init(&c->fx86_compiler, c->build_folder);
+    case ASM:
+        return asm_compiler_init(&c->asm_compiler, c->build_folder);
         break;
     default:
         assert(0 && "Compiler type not implemented");
@@ -97,8 +97,8 @@ bool compiler_init(Compiler *c) {
 
 void compiler_append_expression(Compiler *c, ExprNode *expr) {
     switch (c->type) {
-    case FX86:
-        fasm_x86_64_compiler_append_expression(&c->fx86_compiler, expr);
+    case ASM:
+        asm_compiler_append_expression(&c->asm_compiler, expr);
         break;
     default:
         assert(0 && "Compiler type not implemented");
@@ -111,9 +111,9 @@ void compiler_compile(Compiler *c) {
     const char *output_object_path = arena_strjoin(&c->allocator, c->build_folder, "out.o");
 
     switch (c->type) {
-    case FX86:
-        fasm_x86_64_compiler_generate_assembly(&c->fx86_compiler);
-        if (!fasm_x86_64_compiler_compile(&c->fx86_compiler, output_object_path)) {
+    case ASM:
+        asm_compiler_generate_assembly(&c->asm_compiler);
+        if (!asm_compiler_compile(&c->asm_compiler, output_object_path)) {
             return;
         }
         break;

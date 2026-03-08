@@ -42,7 +42,7 @@ int compile(int argc, char** argv) {
     const char* executable_output_path = "main";
     const char* compiler_c_args = "";
     const char* compiler_linker_args = "";
-    CompilerTypes compiler_type = FX86;
+    CompilerTypes compiler_type = ASM;
 
     if (!folder_create(build_folder, 0755)) {
         return 1;
