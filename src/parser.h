@@ -10,7 +10,6 @@ typedef enum {
     P_CHAR,
     P_STRING,
     P_ASSIGN,
-    P_BINOP,
     P_PLUS,
     P_MINUS,
     P_IDENTIFIER,
@@ -24,6 +23,7 @@ typedef enum {
     P_WHILE,
     P_RETURN,
     P_INDEX,
+    P_DEREF,
 } ExprType;
 
 typedef struct op_node_t ExprNode;
@@ -159,6 +159,13 @@ ExprNode *node_index(Arena *a, ExprNode *address, ExprNode *index) {
     return node;
 }
 
+ExprNode *node_deref(Arena *a, ExprNode *value) {
+    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
+    node->first = value;
+    node->type = P_DEREF;
+    return node;
+}
+
 ExprNode *node_func(Arena *a, const char *identifier) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->string_value = arena_strdup(a, identifier);
@@ -231,8 +238,10 @@ static int get_infix_power(TokenType type) {
     case T_PLUS:
     case T_MINUS:
         return 50;
+    case T_DEREF:
+        return 10;
     case T_ASSIGN:
-        return -10;
+        return 0;
     default:
         return 0;
     }
@@ -299,6 +308,10 @@ static ExprNode *_parse_prefix(Lexer *lexer, Arena *arena) {
         lexer_expect_token(lexer, T_CPAREN);
         return value;
     }
+    case T_MULT: {
+        ExprNode *value = _parser_expression(lexer, arena, get_infix_power(T_DEREF));
+        return node_deref(arena, value);
+    }
     default:
         LEXER_ERROR_PRINT(lexer, "Unexpected unop type: %d\n", lexer->token.type);
         assert(0 && "Unexpected unop");
@@ -338,9 +351,11 @@ static ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
             left = node_op(arena, op, left, right);
         } break;
         case T_ASSIGN: {
-            if (left->type != P_IDENTIFIER) {
-                LEXER_ERROR_PRINT(lexer, "Token left than assign must be a identifier: %d\n", left->type);
-                exit(1);
+            if (get_infix_power(T_ASSIGN) < power) goto rewind;
+
+            if (left->type != P_IDENTIFIER && left->type != P_DEREF) {
+                LEXER_ERROR_PRINT(lexer, "Token left than assign must be a identifier or deref: %d\n", left->type);
+                assert(0 && "Token left than assign must be a identifier or deref");
             }
             ExprNode *right = _parser_expression(lexer, arena, get_infix_power(T_ASSIGN));
             if (!right) {
@@ -546,7 +561,27 @@ static void _print_expression(ExprNode *expr, int depth) {
     case P_FUNC:
         printf("FUNC(%s, args = %d, body = %d)\n", expr->string_value, expr->args.count, expr->count);
         break;
+    case P_DEREF:
+        printf("DREF(\n");
+        _print_expression(expr->first, depth + 1);
+        printf(")");
+        break;
+    case P_RETURN:
+        printf("RETURN(\n");
+        _print_expression(expr->first, depth + 1);
+        printf(")");
+        break;
+    case P_INDEX:
+        printf("ARRAY(\n");
+        _print_expression(expr->first, depth + 1);
+        printf("\n");
+        print_ws(depth + 1);
+        printf(",\n");
+        _print_expression(expr->second, depth + 1);
+        printf(")");
+        break;
     default:
+        fprintf(stderr, "Not imeplemnted expr type: %d\n", expr->type);
         assert(0 && "Not implemented expr type");
     }
 }

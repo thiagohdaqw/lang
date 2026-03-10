@@ -197,7 +197,9 @@ void asm_compiler_generate_assembly(AsmCompiler *c) {
         if (current->type == P_RETURN) {
             CNode *child = _compile_expression(c, &c->main_scope, current->first, &c->allocator, 1);
             fetch_node(c, &c->allocator, 1, "rax", child);
-            asm_fwrite(c, &c->allocator, 1, "jmp pypt_main_ret\n");
+            if (i + 1 < c->main.count) {
+                asm_fwrite(c, &c->allocator, 1, "jmp pypt_main_ret\n");
+            }
             result = node_create(&c->allocator, current);
             result->location.identifier = "rax";
             continue;
@@ -207,7 +209,6 @@ void asm_compiler_generate_assembly(AsmCompiler *c) {
 
     if (result && result->expr->type != P_RETURN) {
         fetch_node(c, &c->allocator, 1, "rax", result);
-        asm_fwrite(c, &c->allocator, 1, "jmp pypt_main_ret\n");
     }
 
     asm_write(c, 0, "pypt_main_ret:\n");
@@ -236,6 +237,8 @@ void _generate_func_section(AsmCompiler *c) {
 }
 
 void _generate_data_section(AsmCompiler *c) {
+    if (shlen(c->data) <= 0) return;
+
     asm_write(c, 0, "\n; Data section\n");
     asm_write(c, 0, "section '.data'\n");
 
@@ -262,6 +265,8 @@ void _generate_data_section(AsmCompiler *c) {
 }
 
 void _generate_external_funcs_section(AsmCompiler *c) {
+    if (c->external_funcs.count <= 0) return;
+
     asm_write(c, 0, "; External funcs\n");
     for (size_t i = 0; i < c->external_funcs.count; i++) {
         asm_fwrite(c, &c->allocator, 0, "extrn %s\n", c->external_funcs.items[i]);
@@ -473,13 +478,30 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         return var;
     }
     case P_ASSIGN: {
-        CNode *value = _compile_expression(c, scope, expr->second, a, depth);
-
-        assert(expr->first->type == P_IDENTIFIER);
-        _assign_var(c, scope, a, depth, node_create(a, expr->first), value);
+        assert(expr->first->type == P_IDENTIFIER || expr->first->type == P_DEREF);
 
         CNode *result = node_create(a, expr);
-        result->location.identifier = value->location.identifier;
+
+        switch (expr->first->type) {
+        case P_IDENTIFIER: {
+            CNode *value = _compile_expression(c, scope, expr->second, a, depth);
+            _assign_var(c, scope, a, depth, node_create(a, expr->first), value);
+            result->location = value->location;
+        } break;
+        case P_DEREF: {
+            CNode *id = _compile_expression(c, scope, expr->first->first, a, depth);
+            fetch_node(c, a, depth, "rax", id);
+            asm_fwritel(c, a, depth, "push rax");
+            CNode *value = _compile_expression(c, scope, expr->second, a, depth);
+            fetch_node(c, a, depth, "rdx", value);
+            asm_fwritel(c, a, depth, "pop rax");
+            asm_fwritel(c, a, depth, "mov [rax], rdx");
+            result->location = id->location;
+        } break;
+        default:
+            assert(0 && "Assign type not implemented");
+        }
+
         return result;
     }
     case P_STRING: {
@@ -505,8 +527,15 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         _create_array(c, scope, a, depth, id, expr->second->number_value);
         return id;
     }
+    case P_DEREF: {
+        CNode *value = _compile_expression(c, scope, expr->first, a, depth);
+        fetch_node(c, a, depth, "rax", value);
+        asm_fwritel(c, a, depth, "mov rax, [rax]");
+        CNode *result = node_create(a, expr);
+        result->location.identifier = "rax";
+        return result;
+    }
     case P_CHAR:
-    case P_BINOP:
     case P_DIV:
     case P_POW:
     case P_BLOCK:

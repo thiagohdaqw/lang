@@ -35,6 +35,7 @@ typedef enum token_t {
     T_ELSE,
     T_WHILE,
     T_RETURN,
+    T_DEREF,
 } TokenType;
 
 typedef struct token {
