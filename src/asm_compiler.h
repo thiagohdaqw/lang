@@ -350,14 +350,12 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
     case P_MINUS: {
         CNode *child = _compile_expression(c, scope, expr->first, a, depth);
         CNode *result = node_create(a, expr);
+        asm_fwrite(c, a, depth, "neg %s\n", child->location.identifier);
         switch (result->location.type) {
         case REG:
             result->location.identifier = child->location.identifier;
-            asm_fwrite(c, a, depth, "neg %s\n", child->location.identifier);
             break;
         case ADDR:
-            result->location.identifier = "rax";
-            break;
         default:
             assert(0 && "Location type not implemented");
         }
