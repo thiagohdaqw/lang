@@ -1,6 +1,9 @@
-a[10];
+a = 0
 
-a[1] = 69
-a[2] = 42
+se a:
+    a = 69
+senao
+    a = 42
+fim
 
-retorne a[1] + a[2]
+retorne a

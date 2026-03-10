@@ -363,7 +363,8 @@ static ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
             if (get_infix_power(T_ASSIGN) < power) goto rewind;
 
             if (left->type != P_IDENTIFIER && left->type != P_DEREF && left->type != P_INDEX) {
-                LEXER_ERROR_PRINT(lexer, "Token left than assign must be a identifier or deref or index: %d\n", left->type);
+                LEXER_ERROR_PRINT(lexer, "Token left than assign must be a identifier or deref or index: %d\n",
+                                  left->type);
                 assert(0 && "Token left than assign must be a identifier or deref or index");
             }
             ExprNode *right = _parser_expression(lexer, arena, get_infix_power(T_ASSIGN));
@@ -522,6 +523,7 @@ static void print_ws(int depth) {
 }
 
 static void _print_expression(ExprNode *expr, int depth) {
+    if (!expr) return;
     print_ws(depth);
     switch (expr->type) {
     case P_NUMBER:
@@ -613,6 +615,10 @@ static void _print_expression(ExprNode *expr, int depth) {
         print_ws(depth + 1);
         printf(",\n");
         _print_expression(expr->second, depth + 1);
+        printf(")");
+        break;
+    case P_IF:
+        printf("IF(\n");
         printf(")");
         break;
     default:

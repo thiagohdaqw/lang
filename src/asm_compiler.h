@@ -36,9 +36,14 @@ typedef struct {
     CNode *value;
 } CVarMap;
 
-typedef struct {
+typedef struct cscope_t {
     CVarMap *vars;
     int count;
+    size_t if_count;
+    size_t block_count;
+    const char *identifier;
+
+    struct cscope_t *parent;
 } CScope;
 
 typedef struct {
@@ -97,15 +102,18 @@ void write_spaces(AsmCompiler *c, int depth) {
         file_write(c->asm_file, "    ");
 }
 
+static CScope cscope_create(const char *identifier, CScope *parent) {
+    CScope scope = {0};
+    scope.identifier = identifier;
+    scope.parent = parent;
+    return scope;
+}
+
 AsmCompiler asm_compiler_create() {
     AsmCompiler compiler = {0};
     compiler.allocator = arena_create(4 * 1024);
+    compiler.main_scope = cscope_create("pypt_main", NULL);
     return compiler;
-}
-
-static CScope cscope_create() {
-    CScope scope = {0};
-    return scope;
 }
 
 static void cscope_destroy(CScope *s) {
@@ -292,7 +300,20 @@ bool asm_compiler_compile(AsmCompiler *c, const char *object_output_path) {
 static void _assign_var(AsmCompiler *c, CScope *s, Arena *a, int depth, CNode *identifier, CNode *value) {
     assert(identifier->expr && identifier->expr->type == P_IDENTIFIER);
 
-    CNode *existing = shget(s->vars, identifier->expr->string_value);
+    CScope *current = s;
+    while (1) {
+        if (shget(current->vars, identifier->expr->string_value)) {
+            break;
+        }
+        current = current->parent;
+
+        if (!current) {
+            current = s;
+            break;
+        }
+    }
+
+    CNode *existing = shget(current->vars, identifier->expr->string_value);
 
     if (existing) {
         asm_fwrite(c, a, depth, "mov [%s], %s\n", existing->location.identifier, value->location.identifier);
@@ -305,7 +326,7 @@ static void _assign_var(AsmCompiler *c, CScope *s, Arena *a, int depth, CNode *i
 
     fetch_node(c, a, depth, "rax", value);
     asm_write(c, depth, "push rax\n");
-    shput(s->vars, identifier->expr->string_value, identifier);
+    shput(current->vars, identifier->expr->string_value, identifier);
 }
 
 static void _create_array(AsmCompiler *c, CScope *s, Arena *a, int depth, CNode *identifier, int length) {
@@ -392,7 +413,7 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         asm_write(c, depth + 1, "push rbp\n");
         asm_write(c, depth + 1, "mov rbp, rsp\n\n");
 
-        CScope func_scope = cscope_create();
+        CScope func_scope = cscope_create(expr->string_value, scope);
 
         assert(expr->args.count <= 6); // TODO: ADD SUPORT TO MORE ARGS
 
@@ -565,11 +586,45 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         result->location.identifier = "rax";
         return result;
     }
+    case P_IF: {
+        int if_id = ++scope->if_count;
+
+        CNode *result = node_create(a, expr);
+
+        CNode *cond = _compile_expression(c, scope, expr->first, a, depth);
+        fetch_node(c, a, depth, "rax", cond);
+        asm_fwritel(c, a, depth, "cmp rax, 0");
+        asm_fwritel(c, a, depth, "je .%s_if_%d_else", scope->identifier, if_id);
+
+        if (expr->second) {
+            _compile_expression(c, scope, expr->second, a, depth + 1);
+            asm_fwritel(c, a, depth + 1, "jmp .%s_if_%d_end", scope->identifier, if_id);
+        }
+        asm_fwritel(c, a, depth, ".%s_if_%d_else:", scope->identifier, if_id);
+        if (expr->third) {
+            _compile_expression(c, scope, expr->third, a, depth + 1);
+        }
+        asm_fwritel(c, a, depth, ".%s_if_%d_end:", scope->identifier, if_id);
+        result->location.identifier = "rax";
+        return result;
+    }
+    case P_BLOCK: {
+        int block_id = ++scope->block_count;
+        CScope block_scope = cscope_create(arena_strformat(a, "%s_block_%d", scope->identifier, block_id), scope);
+
+        CNode *last = NULL;
+
+        for (size_t i = 0; i < expr->count; i++) {
+            ExprNode *current = expr->items[i];
+            last = _compile_expression(c, &block_scope, current, a, depth);
+        }
+
+        cscope_destroy(&block_scope);
+        return last;
+    }
     case P_CHAR:
     case P_DIV:
     case P_POW:
-    case P_BLOCK:
-    case P_IF:
     case P_WHILE:
     default:
         fprintf(stderr, "Type not implemented: %d\n", expr->type);
