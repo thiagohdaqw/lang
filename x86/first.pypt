@@ -1,8 +1,3 @@
-func hello():
-    retorne "hello world\n"
-fim
+a[10]
 
-r = hello()
-write(1, r, strlen(r))
-
-retorne 0
+retorne a

@@ -5,15 +5,24 @@
 #include "utils/arena.h"
 
 #ifndef ASM_WORD_SIZE
-#define ASM_WORD_SIZE "8"
+#define ASM_WORD_SIZE 8
 #endif
+
+typedef enum {
+    REG = 0,
+    ADDR,
+    STR,
+} CLocationType;
+
+typedef struct {
+    CLocationType type;
+    const char *identifier;
+    size_t stack_index;
+} CLocation;
 
 typedef struct {
     ExprNode *expr;
-    size_t stack_index;
-    const char *reg;
-    const char *address;
-    const char *identifier;
+    CLocation location;
 } CNode;
 
 typedef struct {
@@ -81,6 +90,7 @@ static const char *ARG_REGS[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 #define asm_fwrite(c, a, d, f, ...)                                                                                    \
     write_spaces(c, (d));                                                                                              \
     file_write((c)->asm_file, arena_strformat((a), f, ##__VA_ARGS__));
+#define asm_fwritel(c, a, d, f, ...) asm_fwrite((c), (a), (d), (f "\n"), ##__VA_ARGS__)
 
 void write_spaces(AsmCompiler *c, int depth) {
     for (size_t i = 0; i < depth; i++)
@@ -141,11 +151,31 @@ static CNode *node_create(Arena *a, ExprNode *expr) {
     return node;
 }
 
+static void load_address(AsmCompiler *c, Arena *a, int depth, const char *reg, CNode *node) {
+    assert(node);
+    assert(node->location.type == ADDR);
+    asm_fwrite(c, a, depth, "mov %s, [%s]\n", reg, node->location.identifier);
+}
+
 static void fetch_node(AsmCompiler *c, Arena *a, int depth, const char *reg, CNode *node) {
-    if (node->address) {
-        asm_fwrite(c, a, depth, "mov %s, %s\n", reg, node->address);
-    } else if (strcmp(node->reg, reg) != 0) {
-        asm_fwrite(c, a, depth, "mov %s, %s\n", reg, node->reg);
+    assert(node);
+    assert(node->location.identifier);
+
+    switch (node->location.type) {
+    case REG:
+        if (strcmp(node->location.identifier, reg) == 0) {
+            break;
+        }
+        asm_fwritel(c, a, depth, "mov %s, %s", reg, node->location.identifier);
+        break;
+    case ADDR:
+        asm_fwritel(c, a, depth, "mov %s, [%s]", reg, node->location.identifier);
+        break;
+    case STR:
+        asm_fwritel(c, a, depth, "mov %s, %s", reg, node->location.identifier);
+        break;
+    default:
+        assert(0 && "location type not implemented");
     }
 }
 
@@ -169,6 +199,7 @@ void asm_compiler_generate_assembly(AsmCompiler *c) {
             fetch_node(c, &c->allocator, 1, "rax", child);
             asm_fwrite(c, &c->allocator, 1, "jmp pypt_main_ret\n");
             result = node_create(&c->allocator, current);
+            result->location.identifier = "rax";
             continue;
         }
         result = _compile_expression(c, &c->main_scope, current, &c->allocator, 1);
@@ -210,9 +241,9 @@ void _generate_data_section(AsmCompiler *c) {
 
     for (size_t i = 0; i < shlen(c->data); i++) {
         CNode *item = c->data[i].value;
-        assert(item->identifier);
+        assert(item->location.identifier && item->location.type == STR);
 
-        asm_fwrite(c, &c->allocator, 1, "%s db ", item->identifier);
+        asm_fwrite(c, &c->allocator, 1, "%s db ", item->location.identifier);
 
         char *start = item->expr->string_value;
         for (char *buffer = start; *buffer != '\0'; buffer++) {
@@ -253,22 +284,44 @@ bool asm_compiler_compile(AsmCompiler *c, const char *object_output_path) {
     return ret == 0;
 }
 
-static void cscope_assign(AsmCompiler *c, CScope *s, CNode *identifier, CNode *value, Arena *a, int depth) {
+static void _assign_var(AsmCompiler *c, CScope *s, Arena *a, int depth, CNode *identifier, CNode *value) {
     assert(identifier->expr && identifier->expr->type == P_IDENTIFIER);
 
-    CNode *var = shget(s->vars, identifier->expr->string_value);
+    CNode *existing = shget(s->vars, identifier->expr->string_value);
 
-    if (var) {
-        asm_fwrite(c, a, depth, "mov %s, %s\n", var->reg, value->reg);
-    } else {
-        identifier->stack_index = ++s->count;
-        fetch_node(c, a, depth, "rax", value);
-        asm_write(c, depth, "push rax\n");
-
-        identifier->address = arena_strformat(a, "[rbp - " ASM_WORD_SIZE "*%d]", identifier->stack_index);
-        identifier->reg = identifier->address;
-        shput(s->vars, identifier->expr->string_value, identifier);
+    if (existing) {
+        asm_fwrite(c, a, depth, "mov [%s], %s\n", existing->location.identifier, value->location.identifier);
+        return;
     }
+
+    identifier->location.type = ADDR;
+    identifier->location.stack_index = ++s->count;
+    identifier->location.identifier = arena_strformat(a, "rbp-%d", ASM_WORD_SIZE * identifier->location.stack_index);
+
+    fetch_node(c, a, depth, "rax", value);
+    asm_write(c, depth, "push rax\n");
+    shput(s->vars, identifier->expr->string_value, identifier);
+}
+
+static void _create_array(AsmCompiler *c, CScope *s, Arena *a, int depth, CNode *identifier, int length) {
+    assert(identifier->expr && identifier->expr->type == P_IDENTIFIER);
+
+    CNode *existing = shget(s->vars, identifier->expr->string_value);
+
+    if (existing) {
+        assert(0 && "variable already defined");
+        return;
+    }
+
+    asm_fwritel(c, a, depth, "sub rsp, %d", ASM_WORD_SIZE * length);
+    asm_fwritel(c, a, depth, "mov rax, rsp");
+    asm_fwritel(c, a, depth, "push rax");
+
+    identifier->location.type = ADDR;
+    identifier->location.stack_index = s->count + length + 1;
+    identifier->location.identifier = arena_strformat(a, "rbp-%d", ASM_WORD_SIZE * identifier->location.stack_index);
+
+    shput(s->vars, identifier->expr->string_value, identifier);
 }
 
 CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena *a, int depth) {
@@ -276,41 +329,46 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
     case P_NUMBER: {
         // TODO: add support to float
         CNode *node = node_create(a, expr);
-        node->reg = "rcx";
-        asm_fwrite(c, a, depth, "mov %s, %d\n", node->reg, (int)expr->number_value);
+        node->location.identifier = "rcx";
+        asm_fwrite(c, a, depth, "mov %s, %d\n", node->location.identifier, (int)expr->number_value);
         return node;
     }
     case P_RETURN: {
         CNode *child = _compile_expression(c, scope, expr->first, a, depth);
-        asm_fwrite(c, a, depth, "mov rax, %s\n", child->reg);
+        asm_fwrite(c, a, depth, "mov rax, %s\n", child->location.identifier);
         asm_write(c, depth, "ret\n");
 
         CNode *result = node_create(a, expr);
-        result->reg = "rax";
+        result->location.identifier = "rax";
         return result;
     }
     case P_MINUS: {
         CNode *child = _compile_expression(c, scope, expr->first, a, depth);
         CNode *result = node_create(a, expr);
-        result->reg = child->reg;
-        asm_fwrite(c, a, depth, "neg %s\n", child->reg);
+        switch (result->location.type) {
+        case REG:
+            result->location.identifier = child->location.identifier;
+            asm_fwrite(c, a, depth, "neg %s\n", child->location.identifier);
+            break;
+        case ADDR:
+            result->location.identifier = "rax";
+            break;
+        default:
+            assert(0 && "Location type not implemented");
+        }
         return result;
     }
     case P_MULT:
     case P_PLUS: {
         CNode *first_child = _compile_expression(c, scope, expr->first, a, depth);
-        if (!first_child->address) {
-            asm_fwrite(c, a, depth, "push %s\n", first_child->reg);
-        }
+
+        fetch_node(c, a, depth, "rax", first_child);
+        asm_fwritel(c, a, depth, "push rax");
+
         CNode *second_child = _compile_expression(c, scope, expr->second, a, depth);
 
         fetch_node(c, a, depth, "rcx", second_child);
-
-        if (!first_child->address) {
-            asm_fwrite(c, a, depth, "pop rdx\n");
-        } else {
-            fetch_node(c, a, depth, "rdx", first_child);
-        }
+        asm_fwrite(c, a, depth, "pop rdx\n");
 
         switch (expr->type) {
         case P_MULT:
@@ -323,7 +381,7 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
             assert(0 && "op not implemented");
         }
         CNode *result = node_create(a, expr);
-        result->reg = "rcx";
+        result->location.identifier = "rcx";
         return result;
     }
     case P_FUNC: {
@@ -340,9 +398,9 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
             assert(arg->type == P_IDENTIFIER);
 
             CNode *arg_node = node_create(a, arg);
-            arg_node->reg = ARG_REGS[i];
+            arg_node->location.identifier = ARG_REGS[i];
 
-            cscope_assign(c, &func_scope, arg_node, arg_node, a, depth + 1);
+            _assign_var(c, &func_scope, a, depth + 1, arg_node, arg_node);
         }
 
         CNode *last = NULL;
@@ -360,7 +418,6 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         }
 
         if (last && last->expr->type != P_RETURN) {
-            assert(last->reg);
             fetch_node(c, a, depth + 1, "rax", last);
         }
 
@@ -404,7 +461,7 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         }
 
         CNode *result = node_create(a, expr);
-        result->reg = "rax";
+        result->location.identifier = "rax";
         return result;
     }
     case P_IDENTIFIER: {
@@ -419,10 +476,10 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         CNode *value = _compile_expression(c, scope, expr->second, a, depth);
 
         assert(expr->first->type == P_IDENTIFIER);
-        cscope_assign(c, scope, node_create(a, expr->first), value, a, depth);
+        _assign_var(c, scope, a, depth, node_create(a, expr->first), value);
 
         CNode *result = node_create(a, expr);
-        result->reg = value->reg;
+        result->location.identifier = value->location.identifier;
         return result;
     }
     case P_STRING: {
@@ -430,17 +487,23 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
 
         if (existing) {
             CNode *value = node_create(a, expr);
-            value->address = existing->address;
-            value->reg = existing->address;
+            value->location.type = ADDR;
+            value->location.identifier = existing->location.identifier;
             return value;
         } else {
             CNode *value = node_create(a, expr);
-            value->identifier = arena_strformat(a, "dat_%d", shlen(c->data));
-            value->address = value->identifier;
-            value->reg = value->address;
+            value->location.identifier = arena_strformat(a, "dat_%d", shlen(c->data));
+            value->location.type = STR;
             shput(c->data, expr->string_value, value);
             return value;
         }
+    }
+    case P_INDEX: {
+        assert(expr->first->type == P_IDENTIFIER);
+        assert(expr->second->type == P_NUMBER);
+        CNode *id = node_create(a, expr->first);
+        _create_array(c, scope, a, depth, id, expr->second->number_value);
+        return id;
     }
     case P_CHAR:
     case P_BINOP:

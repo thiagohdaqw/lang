@@ -23,6 +23,7 @@ typedef enum {
     P_IF,
     P_WHILE,
     P_RETURN,
+    P_INDEX,
 } ExprType;
 
 typedef struct op_node_t ExprNode;
@@ -38,6 +39,7 @@ typedef struct op_node_t {
     ExprType type;
 
     double number_value;
+    int length;
     char char_value;
     char *string_value;
 
@@ -149,6 +151,14 @@ ExprNode *node_funcall(Arena *a, const char *identifier) {
     return node;
 }
 
+ExprNode *node_index(Arena *a, ExprNode *address, ExprNode *index) {
+    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
+    node->first = address;
+    node->second = index;
+    node->type = P_INDEX;
+    return node;
+}
+
 ExprNode *node_func(Arena *a, const char *identifier) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->string_value = arena_strdup(a, identifier);
@@ -229,8 +239,7 @@ static int get_infix_power(TokenType type) {
 }
 
 static bool is_infix_right_associative(TokenType type) {
-    switch (type)
-    {
+    switch (type) {
     case T_POW:
         return true;
     default:
@@ -241,6 +250,8 @@ static bool is_infix_right_associative(TokenType type) {
 static ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int min_power);
 
 static ExprNode *_parse_identifier(Lexer *lexer, Arena *arena);
+
+static ExprNode *_parse_funcall(Arena *arena, Lexer *lexer);
 
 static ExprNode *_parse_func(Lexer *lexer, Arena *arena);
 
@@ -259,10 +270,12 @@ static ExprNode *_parse_prefix(Lexer *lexer, Arena *arena) {
     case T_END:
         return NULL;
     case T_LITERAL:
-        if (lexer->token.literal_value == '-') {
+        switch (lexer->token.literal_value) {
+        case '-':
             return node_minus(arena, _parser_expression(lexer, arena, 70));
+        default:
+            return NULL;
         }
-        return NULL;
     case T_LONG:
         return node_number(arena, (double)lexer->token.long_value);
     case T_DOUBLE:
@@ -330,7 +343,17 @@ static ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
                 exit(1);
             }
             return node_assign(arena, left, right);
-        } break;
+        }
+        case T_LITERAL:
+            switch (lexer->token.literal_value) {
+            case '[':
+                assert(left->type == P_IDENTIFIER);
+                ExprNode *index = parser_parse_expression(lexer, arena);
+                lexer_expect_literal(lexer, ']');
+                return node_index(arena, left, index);
+            default:
+                goto rewind;
+            }
         default:
             goto rewind;
         }
@@ -388,10 +411,15 @@ static ExprNode *_parse_func(Lexer *lexer, Arena *arena) {
 }
 
 static ExprNode *_parse_identifier(Lexer *lexer, Arena *arena) {
-    if (lexer_peek_next_char(lexer) != '(') {
+    switch (lexer_peek_next_char(lexer)) {
+    case '(':
+        return _parse_funcall(arena, lexer);
+    default:
         return node_identifier(arena, lexer->token.identifier_value);
     }
+}
 
+ExprNode *_parse_funcall(Arena *arena, Lexer *lexer) {
     ExprNode *funcall = node_funcall(arena, lexer->token.identifier_value);
     lexer_expect_token(lexer, T_OPAREN);
     while (lexer_peek_next_char(lexer) != ')') {
