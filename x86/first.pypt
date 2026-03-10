@@ -1,9 +1,9 @@
-func test(a):
-    se a:
-        retorne 69
-    senao
-        retorne 42
-    fim
+a = 3
+enquanto a:
+    a = a - 1
+
+    out = "hello\n"
+    write(1, out, strlen(out))
 fim
 
-retorne test(0)
+retorne a

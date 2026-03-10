@@ -67,7 +67,6 @@ int compile(int argc, char** argv) {
             if (lexer_is_eof(&lexer)) break;
             continue;
         }
-        parser_print_expression(expr);
         compiler_append_expression(&compiler, expr);
     }
 

@@ -38,9 +38,10 @@ typedef struct {
 
 typedef struct cscope_t {
     CVarMap *vars;
-    int count;
+    int stack_count;
     size_t if_count;
     size_t block_count;
+    size_t while_count;
     const char *identifier;
     const char *ret;
 
@@ -108,6 +109,10 @@ static CScope cscope_create(const char *identifier, CScope *parent, const char *
     scope.identifier = identifier;
     scope.parent = parent;
     scope.ret = ret;
+
+    if (parent) {
+        scope.stack_count = parent->stack_count;
+    }
     return scope;
 }
 
@@ -328,7 +333,7 @@ static void _assign_var(AsmCompiler *c, CScope *s, Arena *a, int depth, CNode *i
     shput(current->vars, identifier->expr->string_value, identifier);
 
     identifier->location.type = ADDR;
-    identifier->location.stack_index = ++s->count;
+    identifier->location.stack_index = ++s->stack_count;
     identifier->location.identifier = arena_strformat(a, "rbp-%d", ASM_WORD_SIZE * identifier->location.stack_index);
 }
 
@@ -347,7 +352,7 @@ static void _create_array(AsmCompiler *c, CScope *s, Arena *a, int depth, CNode 
     asm_fwritel(c, a, depth, "push rax");
 
     identifier->location.type = ADDR;
-    identifier->location.stack_index = s->count + length + 1;
+    identifier->location.stack_index = s->stack_count + length + 1;
     identifier->location.identifier = arena_strformat(a, "rbp-%d", ASM_WORD_SIZE * identifier->location.stack_index);
 
     shput(s->vars, identifier->expr->string_value, identifier);
@@ -494,6 +499,12 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
     }
     case P_IDENTIFIER: {
         CNode *var = shget(scope->vars, expr->string_value);
+        CScope *s = scope;
+        while (!var) {
+            s = s->parent;
+            if (!s) break;
+            var = shget(s->vars, expr->string_value);
+        }
         if (!var) {
             fprintf(stderr, "Variable '%s' not found\n", expr->string_value);
             assert(var);
@@ -598,17 +609,17 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         CNode *cond = _compile_expression(c, scope, expr->first, a, depth);
         fetch_node(c, a, depth, "rax", cond);
         asm_fwritel(c, a, depth, "cmp rax, 0");
-        asm_fwritel(c, a, depth, "je .%s_if_%d_else", scope->identifier, if_id);
+        asm_fwritel(c, a, depth, "je .if_%d_else", if_id);
 
         if (expr->second) {
             _compile_expression(c, scope, expr->second, a, depth + 1);
-            asm_fwritel(c, a, depth + 1, "jmp .%s_if_%d_end", scope->identifier, if_id);
+            asm_fwritel(c, a, depth + 1, "jmp .if_%d_end", if_id);
         }
-        asm_fwritel(c, a, depth, ".%s_if_%d_else:", scope->identifier, if_id);
+        asm_fwritel(c, a, depth, ".if_%d_else:", if_id);
         if (expr->third) {
             _compile_expression(c, scope, expr->third, a, depth + 1);
         }
-        asm_fwritel(c, a, depth, ".%s_if_%d_end:", scope->identifier, if_id);
+        asm_fwritel(c, a, depth, ".if_%d_end:", if_id);
         result->location.identifier = "rax";
         return result;
     }
@@ -634,10 +645,23 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         cscope_destroy(&block_scope);
         return last;
     }
+    case P_WHILE: {
+        int while_id = ++scope->while_count;
+
+        asm_fwritel(c, a, depth, ".%s_while_%d_cond:", scope->identifier, while_id);
+        CNode *cond = _compile_expression(c, scope, expr->first, a, depth+1);
+        fetch_node(c, a, depth+1, "rax", cond);
+        asm_fwritel(c, a, depth+1, "cmp rax, 0");
+        asm_fwritel(c, a, depth+1, "je .%s_while_%d_end", scope->identifier, while_id);
+        asm_fwritel(c, a, depth, ".%s_while_%d_body:", scope->identifier, while_id);
+        _compile_expression(c, scope, expr->second, a, depth+1);
+        asm_fwritel(c, a, depth, "jmp .%s_while_%d_cond", scope->identifier, while_id);
+        asm_fwritel(c, a, depth, ".%s_while_%d_end:", scope->identifier, while_id);
+        return node_create(a, expr);
+    }
     case P_CHAR:
     case P_DIV:
     case P_POW:
-    case P_WHILE:
     default:
         fprintf(stderr, "Type not implemented: %d\n", expr->type);
         assert(0 && "Type not implemented");
