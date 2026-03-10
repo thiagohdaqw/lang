@@ -42,6 +42,7 @@ typedef struct cscope_t {
     size_t if_count;
     size_t block_count;
     const char *identifier;
+    const char *ret;
 
     struct cscope_t *parent;
 } CScope;
@@ -102,17 +103,18 @@ void write_spaces(AsmCompiler *c, int depth) {
         file_write(c->asm_file, "    ");
 }
 
-static CScope cscope_create(const char *identifier, CScope *parent) {
+static CScope cscope_create(const char *identifier, CScope *parent, const char *ret) {
     CScope scope = {0};
     scope.identifier = identifier;
     scope.parent = parent;
+    scope.ret = ret;
     return scope;
 }
 
 AsmCompiler asm_compiler_create() {
     AsmCompiler compiler = {0};
     compiler.allocator = arena_create(4 * 1024);
-    compiler.main_scope = cscope_create("pypt_main", NULL);
+    compiler.main_scope = cscope_create("pypt_main", NULL, "pypt_main_ret");
     return compiler;
 }
 
@@ -319,14 +321,15 @@ static void _assign_var(AsmCompiler *c, CScope *s, Arena *a, int depth, CNode *i
         asm_fwrite(c, a, depth, "mov [%s], %s\n", existing->location.identifier, value->location.identifier);
         return;
     }
+    
+    fetch_node(c, a, depth, "rax", value);
+    asm_write(c, depth, "push rax\n");
+
+    shput(current->vars, identifier->expr->string_value, identifier);
 
     identifier->location.type = ADDR;
     identifier->location.stack_index = ++s->count;
     identifier->location.identifier = arena_strformat(a, "rbp-%d", ASM_WORD_SIZE * identifier->location.stack_index);
-
-    fetch_node(c, a, depth, "rax", value);
-    asm_write(c, depth, "push rax\n");
-    shput(current->vars, identifier->expr->string_value, identifier);
 }
 
 static void _create_array(AsmCompiler *c, CScope *s, Arena *a, int depth, CNode *identifier, int length) {
@@ -413,7 +416,8 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         asm_write(c, depth + 1, "push rbp\n");
         asm_write(c, depth + 1, "mov rbp, rsp\n\n");
 
-        CScope func_scope = cscope_create(expr->string_value, scope);
+        CScope func_scope =
+            cscope_create(expr->string_value, NULL, arena_strformat(a, "func_%s_ret", expr->string_value));
 
         assert(expr->args.count <= 6); // TODO: ADD SUPORT TO MORE ARGS
 
@@ -434,7 +438,7 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
             if (current->type == P_RETURN) {
                 CNode *child = _compile_expression(c, &func_scope, current->first, a, depth + 1);
                 fetch_node(c, a, depth + 1, "rax", child);
-                asm_fwrite(c, a, depth + 1, "jmp func_ret_%s\n", expr->string_value);
+                asm_fwrite(c, a, depth + 1, "jmp %s\n", func_scope.ret);
                 last = node_create(a, current);
                 continue;
             }
@@ -445,7 +449,7 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
             fetch_node(c, a, depth + 1, "rax", last);
         }
 
-        asm_fwrite(c, a, depth, "func_ret_%s:\n", expr->string_value);
+        asm_fwrite(c, a, depth, "%s:\n", func_scope.ret);
         asm_write(c, depth + 1, "mov rsp, rbp\n");
         asm_write(c, depth + 1, "pop rbp\n");
         asm_write(c, depth + 1, "ret\n");
@@ -610,12 +614,20 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
     }
     case P_BLOCK: {
         int block_id = ++scope->block_count;
-        CScope block_scope = cscope_create(arena_strformat(a, "%s_block_%d", scope->identifier, block_id), scope);
+        CScope block_scope =
+            cscope_create(arena_strformat(a, "%s_block_%d", scope->identifier, block_id), scope, scope->ret);
 
         CNode *last = NULL;
 
         for (size_t i = 0; i < expr->count; i++) {
             ExprNode *current = expr->items[i];
+            if (current->type == P_RETURN) {
+                CNode *child = _compile_expression(c, &block_scope, current->first, a, depth + 1);
+                fetch_node(c, a, depth + 1, "rax", child);
+                asm_fwritel(c, a, depth + 1, "jmp %s", block_scope.ret);
+                last = node_create(a, current);
+                continue;
+            }
             last = _compile_expression(c, &block_scope, current, a, depth);
         }
 

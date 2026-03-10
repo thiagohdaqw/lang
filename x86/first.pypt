@@ -1,9 +1,9 @@
-a = 0
-
-se a:
-    a = 69
-senao
-    a = 42
+func test(a):
+    se a:
+        retorne 69
+    senao
+        retorne 42
+    fim
 fim
 
-retorne a
+retorne test(0)
