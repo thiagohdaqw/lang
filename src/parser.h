@@ -294,6 +294,11 @@ static ExprNode *_parse_prefix(Lexer *lexer, Arena *arena) {
         return _parse_return(lexer, arena);
     case T_MINUS:
         return node_minus(arena, _parser_expression(lexer, arena, 0));
+    case T_OPAREN: {
+        ExprNode *value = parser_parse_expression(lexer, arena);
+        lexer_expect_token(lexer, T_CPAREN);
+        return value;
+    }
     default:
         LEXER_ERROR_PRINT(lexer, "Unexpected unop type: %d\n", lexer->token.type);
         assert(0 && "Unexpected unop");
