@@ -476,7 +476,7 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         return var;
     }
     case P_ASSIGN: {
-        assert(expr->first->type == P_IDENTIFIER || expr->first->type == P_DEREF);
+        assert(expr->first->type == P_IDENTIFIER || expr->first->type == P_DEREF || expr->first->type == P_INDEX);
 
         CNode *result = node_create(a, expr);
 
@@ -494,7 +494,25 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
             fetch_node(c, a, depth, "rdx", value);
             asm_fwritel(c, a, depth, "pop rax");
             asm_fwritel(c, a, depth, "mov [rax], rdx");
-            result->location = id->location;
+            result->location.type = REG;
+            result->location.identifier = "rax";
+        } break;
+        case P_INDEX: {
+            CNode *id = _compile_expression(c, scope, expr->first->first, a, depth);
+            fetch_node(c, a, depth, "rax", id);
+            asm_fwritel(c, a, depth, "push rax");
+            CNode *index = _compile_expression(c, scope, expr->first->second, a, depth);
+            fetch_node(c, a, depth, "rdx", index);
+            asm_fwritel(c, a, depth, "imul rdx, %d", ASM_WORD_SIZE);
+            asm_fwritel(c, a, depth, "pop rax");
+            asm_fwritel(c, a, depth, "add rax, rdx");
+            asm_fwritel(c, a, depth, "push rax");
+            CNode *value = _compile_expression(c, scope, expr->second, a, depth);
+            fetch_node(c, a, depth, "rdx", value);
+            asm_fwritel(c, a, depth, "pop rax");
+            asm_fwritel(c, a, depth, "mov [rax], rdx");
+            result->location.type = REG;
+            result->location.identifier = "rax";
         } break;
         default:
             assert(0 && "Assign type not implemented");
@@ -518,16 +536,30 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
             return value;
         }
     }
-    case P_INDEX: {
+    case P_ARRAY: {
         assert(expr->first->type == P_IDENTIFIER);
         assert(expr->second->type == P_NUMBER);
         CNode *id = node_create(a, expr->first);
         _create_array(c, scope, a, depth, id, expr->second->number_value);
         return id;
     }
+    case P_INDEX: {
+        CNode *id = _compile_expression(c, scope, expr->first, a, depth);
+        fetch_node(c, a, depth, "rax", id);
+        asm_fwritel(c, a, depth, "push rax");
+        CNode *index = _compile_expression(c, scope, expr->second, a, depth);
+        fetch_node(c, a, depth, "rdx", index);
+        asm_fwritel(c, a, depth, "imul rdx, %d", ASM_WORD_SIZE);
+        asm_fwritel(c, a, depth, "pop rax");
+        asm_fwritel(c, a, depth, "add rax, rdx");
+        asm_fwritel(c, a, depth, "mov rax, [rax]");
+        CNode *result = node_create(a, expr);
+        result->location.identifier = "rax";
+        return result;
+    } break;
     case P_DEREF: {
-        CNode *value = _compile_expression(c, scope, expr->first, a, depth);
-        fetch_node(c, a, depth, "rax", value);
+        CNode *id = _compile_expression(c, scope, expr->first, a, depth);
+        fetch_node(c, a, depth, "rax", id);
         asm_fwritel(c, a, depth, "mov rax, [rax]");
         CNode *result = node_create(a, expr);
         result->location.identifier = "rax";

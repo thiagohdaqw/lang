@@ -23,6 +23,7 @@ typedef enum {
     P_WHILE,
     P_RETURN,
     P_INDEX,
+    P_ARRAY,
     P_DEREF,
 } ExprType;
 
@@ -148,6 +149,14 @@ ExprNode *node_funcall(Arena *a, const char *identifier) {
     node->args.capacity = 0;
     node->args.count = 0;
     node->type = P_FUNC_CALL;
+    return node;
+}
+
+ExprNode *node_array(Arena *a, ExprNode *id, ExprNode *index) {
+    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
+    node->first = id;
+    node->second = index;
+    node->type = P_ARRAY;
     return node;
 }
 
@@ -353,9 +362,9 @@ static ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
         case T_ASSIGN: {
             if (get_infix_power(T_ASSIGN) < power) goto rewind;
 
-            if (left->type != P_IDENTIFIER && left->type != P_DEREF) {
-                LEXER_ERROR_PRINT(lexer, "Token left than assign must be a identifier or deref: %d\n", left->type);
-                assert(0 && "Token left than assign must be a identifier or deref");
+            if (left->type != P_IDENTIFIER && left->type != P_DEREF && left->type != P_INDEX) {
+                LEXER_ERROR_PRINT(lexer, "Token left than assign must be a identifier or deref or index: %d\n", left->type);
+                assert(0 && "Token left than assign must be a identifier or deref or index");
             }
             ExprNode *right = _parser_expression(lexer, arena, get_infix_power(T_ASSIGN));
             if (!right) {
@@ -367,13 +376,14 @@ static ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
         case T_LITERAL:
             switch (lexer->token.literal_value) {
             case '[':
-                assert(left->type == P_IDENTIFIER);
                 ExprNode *index = parser_parse_expression(lexer, arena);
                 lexer_expect_literal(lexer, ']');
-                return node_index(arena, left, index);
+                left = node_index(arena, left, index);
+                break;
             default:
                 goto rewind;
             }
+            break;
         default:
             goto rewind;
         }
@@ -434,6 +444,22 @@ static ExprNode *_parse_identifier(Lexer *lexer, Arena *arena) {
     switch (lexer_peek_next_char(lexer)) {
     case '(':
         return _parse_funcall(arena, lexer);
+    case '[': {
+        Reader reader = lexer_save_reader(lexer);
+
+        lexer_next_token(lexer);
+        ExprNode *id = node_identifier(arena, lexer->token.identifier_value);
+        ExprNode *index = parser_parse_expression(lexer, arena);
+        lexer_expect_literal(lexer, ']');
+
+        Token next = lexer_peek_next_token(lexer);
+        if (next.type == T_LITERAL && next.literal_value == ';') {
+            return node_array(arena, id, index);
+        } else {
+            lexer_rewind_reader(lexer, reader);
+            return node_identifier(arena, lexer->token.identifier_value);
+        }
+    } break;
     default:
         return node_identifier(arena, lexer->token.identifier_value);
     }
@@ -572,6 +598,15 @@ static void _print_expression(ExprNode *expr, int depth) {
         printf(")");
         break;
     case P_INDEX:
+        printf("INDEX(\n");
+        _print_expression(expr->first, depth + 1);
+        printf("\n");
+        print_ws(depth + 1);
+        printf(",\n");
+        _print_expression(expr->second, depth + 1);
+        printf(")");
+        break;
+    case P_ARRAY:
         printf("ARRAY(\n");
         _print_expression(expr->first, depth + 1);
         printf("\n");
