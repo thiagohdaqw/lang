@@ -5,7 +5,10 @@
   - [] - Inteiro 32bits
   - [] - Float 64bits
   - [] - Float 32bits
-- [x] - Condicional
+- [-] - Condicional
+  - [x] - If
+  - [x] - Else
+  - [] - Else if
 - [x] - Repetição
   - [x] - While
   - [] - For
@@ -28,3 +31,13 @@
   - [] - IO
     - [] - escreva(a, b, ...) / print()
     - [] - leia()
+- [] - Melhorias
+  - [] - Se assemelhar a sintaxe do python
+    - [] - Remover necessidade de colocar 'fim' no final dos blocos
+    - [] - Adicionar : no senao
+  - [] - Mensagens de erro com arquivo, linha e coluna
+  - [] - Traduzir enums
+- [] - Otimização
+  - [] - Otimizar escolha de registrador
+  - [] - Pré calcular expressões em tempo de compilação
+  - [] - ...
