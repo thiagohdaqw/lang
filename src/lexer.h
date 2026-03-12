@@ -29,6 +29,8 @@ typedef enum token_t {
     T_EQUAL,
     T_LESS,
     T_LEQUAL,
+    T_GREATER,
+    T_GEQUAL,
     T_END,
     T_FUNC,
     T_IF,
@@ -36,6 +38,8 @@ typedef enum token_t {
     T_WHILE,
     T_RETURN,
     T_DEREF,
+    T_AND,
+    T_OR,
 } TokenType;
 
 typedef struct token {
@@ -86,6 +90,7 @@ Token lexer_peek_next_token(Lexer *lexer);
 #ifndef __LEXER_H_IMP__
 #define __LEXER_H_IMP__
 
+#include "utils/file.h"
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
@@ -93,7 +98,6 @@ Token lexer_peek_next_token(Lexer *lexer);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "utils/file.h"
 
 #define get_char(l) (l->reader.reader[l->reader.position])
 #define is_eof(l)                                                                                                      \
@@ -207,10 +211,10 @@ static bool parse_literal(Lexer *lexer) {
     switch (get_char(lexer)) {
     case '+':
         lexer->token.type = T_PLUS;
-        break;
+        return lexer;
     case '-':
         lexer->token.type = T_MINUS;
-        break;
+        return lexer;
     case '*':
         lexer->token.type = T_MULT;
 
@@ -219,41 +223,49 @@ static bool parse_literal(Lexer *lexer) {
             lexer->token.type = T_POW;
             break;
         }
-        break;
+        return lexer;
     case '/':
         lexer->token.type = T_DIV;
-        break;
+        return lexer;
     case '{':
         lexer->token.type = T_OBRACKET;
-        break;
+        return lexer;
     case '}':
         lexer->token.type = T_CBRACKET;
-        break;
+        return lexer;
     case '(':
         lexer->token.type = T_OPAREN;
-        break;
+        return lexer;
     case ')':
         lexer->token.type = T_CPAREN;
-        break;
+        return lexer;
     case '=': {
         lexer->token.type = T_ASSIGN;
         if (lexer_peek_next_char(lexer) == '=') {
             lexer->token.type = T_EQUAL;
             next_char(lexer);
         }
-    } break;
+        return lexer;
+    }
     case '<': {
         lexer->token.type = T_LESS;
         if (lexer_peek_next_char(lexer) == '=') {
             lexer->token.type = T_LEQUAL;
             next_char(lexer);
         }
-    } break;
-    default:
-        lexer->token.type = T_LITERAL;
-        break;
+        return lexer;
+    }
+    case '>': {
+        lexer->token.type = T_GREATER;
+        if (lexer_peek_next_char(lexer) == '=') {
+            lexer->token.type = T_GEQUAL;
+            next_char(lexer);
+        }
+        return lexer;
+    }
     }
 
+    lexer->token.type = T_LITERAL;
     return true;
 }
 
@@ -294,6 +306,10 @@ static bool parse_identifier(Lexer *lexer) {
         lexer->token.type = T_WHILE;
     } else if (strcmp(id, "retorne") == 0) {
         lexer->token.type = T_RETURN;
+    } else if (strcmp(id, "e") == 0) {
+        lexer->token.type = T_AND;
+    } else if (strcmp(id, "ou") == 0) {
+        lexer->token.type = T_OR;
     }
 
     return true;
@@ -360,7 +376,7 @@ bool lexer_next_token(Lexer *lexer) {
 void lexer_expect_token(Lexer *lexer, TokenType type) {
     if (!lexer_next_token(lexer) || lexer->token.type != type) {
         LEXER_ERROR_PRINT(lexer, "Expected token %d but got token %d\n", type, lexer->token.type);
-        exit(1);
+        assert(0 && "expected token");
     }
 }
 
@@ -368,7 +384,7 @@ void lexer_expect_literal(Lexer *lexer, char value) {
     lexer_expect_token(lexer, T_LITERAL);
     if (lexer->token.literal_value != value) {
         LEXER_ERROR_PRINT(lexer, "Expected literal %c but got literal %c\n", value, lexer->token.literal_value);
-        exit(1);
+        assert(0 && "expected token");
     }
 }
 

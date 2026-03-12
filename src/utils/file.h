@@ -15,6 +15,7 @@ bool folder_create(const char* folder, int mode);
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 #include <string.h>
 #include <sys/stat.h>
 

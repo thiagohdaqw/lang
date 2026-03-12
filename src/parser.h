@@ -14,6 +14,13 @@ typedef enum {
     P_MINUS,
     P_IDENTIFIER,
     P_DIV,
+    P_EQUAL,
+    P_LESS,
+    P_LEQUAL,
+    P_GREATER,
+    P_GEQUAL,
+    P_AND,
+    P_OR,
     P_MULT,
     P_POW,
     P_FUNC,
@@ -115,6 +122,14 @@ ExprNode *node_div(Arena *a, ExprNode *left, ExprNode *right) {
 ExprNode *node_pow(Arena *a, ExprNode *left, ExprNode *right) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->type = P_POW;
+    node->first = left;
+    node->second = right;
+    return node;
+}
+
+ExprNode *node_binop(Arena *a, TokenType type, ExprNode *left, ExprNode *right) {
+    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
+    node->type = type;
     node->first = left;
     node->second = right;
     return node;
@@ -232,7 +247,22 @@ ExprNode *node_op(Arena *a, TokenType op, ExprNode *left, ExprNode *right) {
         return node_pow(a, left, right);
     case T_ASSIGN:
         return node_assign(a, left, right);
+    case T_AND:
+        return node_binop(a, P_AND, left, right);
+    case T_OR:
+        return node_binop(a, P_OR, left, right);
+    case T_EQUAL:
+        return node_binop(a, P_EQUAL, left, right);
+    case T_LESS:
+        return node_binop(a, P_LESS, left, right);
+    case T_LEQUAL:
+        return node_binop(a, P_LEQUAL, left, right);
+    case T_GREATER:
+        return node_binop(a, P_GREATER, left, right);
+    case T_GEQUAL:
+        return node_binop(a, P_GEQUAL, left, right);
     default:
+        fprintf(stderr, "Unexpected op node type: %d\n", op);
         assert(0 && "Unexpected op node type");
     }
 }
@@ -247,6 +277,16 @@ static int get_infix_power(TokenType type) {
     case T_PLUS:
     case T_MINUS:
         return 50;
+    case T_EQUAL:
+    case T_LESS:
+    case T_LEQUAL:
+    case T_GREATER:
+    case T_GEQUAL:
+        return 40;
+    case T_AND:
+        return 30;
+    case T_OR:
+        return 20;
     case T_DEREF:
         return 10;
     case T_ASSIGN:
@@ -338,6 +378,13 @@ static ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
         if (!lexer_next_token(lexer)) return left;
 
         switch (lexer->token.type) {
+        case T_EQUAL:
+        case T_AND:
+        case T_OR:
+        case T_LESS:
+        case T_LEQUAL:
+        case T_GREATER:
+        case T_GEQUAL:
         case T_PLUS:
         case T_MINUS:
         case T_MULT:
