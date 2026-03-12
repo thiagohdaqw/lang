@@ -1,7 +1,11 @@
-func hello():
-    escreval("ola")
+a = 3
+b = 10
+
+enquanto a > 0 e b > 0:
+    escreval("...")
+    a = a-1
+    b = b-1
 fim
 
-hello()
-
-retorne 69
+escreval("Fim")
+retorne 1 + 2

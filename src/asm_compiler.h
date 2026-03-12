@@ -167,10 +167,19 @@ static CNode *node_create(Arena *a, ExprNode *expr) {
     return node;
 }
 
-static void load_address(AsmCompiler *c, Arena *a, int depth, const char *reg, CNode *node) {
-    assert(node);
-    assert(node->location.type == ADDR);
-    asm_fwrite(c, a, depth, "mov %s, [%s]\n", reg, node->location.identifier);
+
+static void _append_external_function(AsmCompiler *c, ExprNode *expr) {
+    bool existing = false;
+    for (size_t i = 0; i < c->external_funcs.count; i++) {
+        if (strcmp(expr->string_value, c->external_funcs.items[i]) == 0) {
+            existing = true;
+            break;
+        }
+    }
+
+    if (existing) return;
+
+    da_append(&c->external_funcs, expr->string_value);
 }
 
 static void fetch_node(AsmCompiler *c, Arena *a, int depth, const char *reg, CNode *node) {
@@ -195,7 +204,8 @@ static void fetch_node(AsmCompiler *c, Arena *a, int depth, const char *reg, CNo
     }
 }
 
-static CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena *a, int depth);
+static CNode *_compile_expression(AsmCompiler *c, CScope *scope, Arena *a, int depth, ExprNode *expr,
+                                  const char *out_reg);
 static void _generate_export_funcs_section(AsmCompiler *c);
 static void _generate_func_section(AsmCompiler *c);
 static void _generate_external_funcs_section(AsmCompiler *c);
@@ -211,7 +221,7 @@ void _generate_main_section(AsmCompiler *c) {
     for (size_t i = 0; i < c->main.count; i++) {
         ExprNode *current = c->main.items[i];
         if (current->type == P_RETURN) {
-            CNode *child = _compile_expression(c, &c->main_scope, current->first, &c->allocator, 1);
+            CNode *child = _compile_expression(c, &c->main_scope, &c->allocator, 1, current->first, "rax");
             fetch_node(c, &c->allocator, 1, "rax", child);
             if (i + 1 < c->main.count) {
                 asm_fwrite(c, &c->allocator, 1, "jmp pypt_main_ret\n");
@@ -220,7 +230,7 @@ void _generate_main_section(AsmCompiler *c) {
             result->location.identifier = "rax";
             continue;
         }
-        result = _compile_expression(c, &c->main_scope, current, &c->allocator, 1);
+        result = _compile_expression(c, &c->main_scope, &c->allocator, 1, current, "rax");
     }
 
     if (result && result->expr->type != P_RETURN && result->location.identifier) {
@@ -266,7 +276,7 @@ void _generate_func_section(AsmCompiler *c) {
     for (size_t i = 0; i < c->funcs.count; i++) {
         // ArenaNode saved = arena_save(&c->allocator);
 
-        _compile_expression(c, &c->main_scope, c->funcs.items[i], &c->allocator, 0);
+        _compile_expression(c, &c->main_scope, &c->allocator, 0, c->funcs.items[i], "rax");
 
         // arena_rewind(&c->allocator, saved);
     }
@@ -293,7 +303,7 @@ void _generate_data_section(AsmCompiler *c) {
         }
 
         if (*start != '\0') {
-            asm_fwrite(c, &c->allocator, 0, "\"%s\",0", start);
+            asm_fwritel(c, &c->allocator, 0, "\"%s\",0", start);
         } else {
             asm_write(c, 0, "0\n");
         }
@@ -379,7 +389,7 @@ static void _create_array(AsmCompiler *c, CScope *s, Arena *a, int depth, CNode 
     shput(s->vars, identifier->expr->string_value, identifier);
 }
 
-void _compile_func(AsmCompiler *c, CScope *s, ExprNode *expr, Arena *a, int depth) {
+void _compile_func(AsmCompiler *c, CScope *s, Arena *a, int depth, ExprNode *expr) {
     char *prefix = expr->exportable ? "" : "func_";
 
     asm_fwrite(c, a, depth, "%s%s:\n", prefix, expr->string_value);
@@ -406,13 +416,13 @@ void _compile_func(AsmCompiler *c, CScope *s, ExprNode *expr, Arena *a, int dept
     for (size_t i = 0; i < block_node->count; i++) {
         ExprNode *current = block_node->items[i];
         if (current->type == P_RETURN) {
-            CNode *child = _compile_expression(c, &func_scope, current->first, a, depth + 1);
+            CNode *child = _compile_expression(c, &func_scope, a, depth + 1, current->first, "rax");
             fetch_node(c, a, depth + 1, "rax", child);
             asm_fwrite(c, a, depth + 1, "jmp %s\n", func_scope.ret);
             last = node_create(a, current);
             continue;
         }
-        last = _compile_expression(c, &func_scope, current, a, depth + 1);
+        last = _compile_expression(c, &func_scope, a, depth + 1, current, "rax");
     }
 
     if (last && last->expr->type != P_RETURN && last->location.identifier) {
@@ -428,31 +438,30 @@ void _compile_func(AsmCompiler *c, CScope *s, ExprNode *expr, Arena *a, int dept
     cscope_destroy(&func_scope);
 }
 
-CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena *a, int depth) {
+CNode *_compile_expression(AsmCompiler *c, CScope *scope, Arena *a, int depth, ExprNode *expr, const char *out_reg) {
+    CNode *result = node_create(a, expr);
+    result->location.identifier = out_reg;
+
     switch (expr->type) {
     case P_NUMBER: {
         // TODO: add support to float
-        CNode *node = node_create(a, expr);
-        node->location.identifier = "rcx";
-        asm_fwrite(c, a, depth, "mov %s, %d\n", node->location.identifier, (int)expr->number_value);
-        return node;
+        asm_fwrite(c, a, depth, "mov %s, %d\n", result->location.identifier, (int)expr->number_value);
+        return result;
     }
     case P_RETURN: {
-        CNode *child = _compile_expression(c, scope, expr->first, a, depth);
-        asm_fwrite(c, a, depth, "mov rax, %s\n", child->location.identifier);
-        asm_write(c, depth, "ret\n");
-
-        CNode *result = node_create(a, expr);
+        CNode *child = _compile_expression(c, scope, a, depth, expr->first, "rax");
         result->location.identifier = "rax";
+        fetch_node(c, a, depth, result->location.identifier, child);
+        asm_write(c, depth, "ret\n");
         return result;
     }
     case P_MINUS: {
-        CNode *child = _compile_expression(c, scope, expr->first, a, depth);
-        CNode *result = node_create(a, expr);
-        asm_fwrite(c, a, depth, "neg %s\n", child->location.identifier);
+        CNode *child = _compile_expression(c, scope, a, depth, expr->first, result->location.identifier);
+        fetch_node(c, a, depth, result->location.identifier, child);
+        asm_fwrite(c, a, depth, "neg %s\n", result->location.identifier);
         switch (result->location.type) {
         case REG:
-            result->location.identifier = child->location.identifier;
+            fetch_node(c, a, depth, result->location.identifier, child);
             break;
         case ADDR:
         default:
@@ -469,17 +478,14 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
     case P_OR:
     case P_MULT:
     case P_PLUS: {
-        CNode *first_child = _compile_expression(c, scope, expr->first, a, depth);
-
+        CNode *first_child = _compile_expression(c, scope, a, depth, expr->first, "rax");
         fetch_node(c, a, depth, "rax", first_child);
         asm_fwritel(c, a, depth, "push rax");
 
-        CNode *second_child = _compile_expression(c, scope, expr->second, a, depth);
+        CNode *second_child = _compile_expression(c, scope, a, depth, expr->second, "rdx");
+        fetch_node(c, a, depth, "rdx", second_child);
+        asm_fwrite(c, a, depth, "pop rcx\n");
 
-        fetch_node(c, a, depth, "rcx", second_child);
-        asm_fwrite(c, a, depth, "pop rdx\n");
-
-        CNode *result = node_create(a, expr);
         result->location.identifier = "rcx";
 
         switch (expr->type) {
@@ -491,31 +497,31 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
             break;
         case P_EQUAL:
             asm_write(c, depth, "xor rax, rax\n");
-            asm_write(c, depth, "cmp rdx, rcx\n");
+            asm_write(c, depth, "cmp rcx, rdx\n");
             asm_write(c, depth, "sete ah\n");
             result->location.identifier = "rax";
             break;
         case P_GREATER:
             asm_write(c, depth, "xor rax, rax\n");
-            asm_write(c, depth, "cmp rdx, rcx\n");
+            asm_write(c, depth, "cmp rcx, rdx\n");
             asm_write(c, depth, "setg ah\n");
             result->location.identifier = "rax";
             break;
         case P_GEQUAL:
             asm_write(c, depth, "xor rax, rax\n");
-            asm_write(c, depth, "cmp rdx, rcx\n");
+            asm_write(c, depth, "cmp rcx, rdx\n");
             asm_write(c, depth, "setge ah\n");
             result->location.identifier = "rax";
             break;
         case P_LESS:
             asm_write(c, depth, "xor rax, rax\n");
-            asm_write(c, depth, "cmp rdx, rcx\n");
+            asm_write(c, depth, "cmp rcx, rdx\n");
             asm_write(c, depth, "setl ah\n");
             result->location.identifier = "rax";
             break;
         case P_LEQUAL:
             asm_write(c, depth, "xor rax, rax\n");
-            asm_write(c, depth, "cmp rdx, rcx\n");
+            asm_write(c, depth, "cmp rcx, rdx\n");
             asm_write(c, depth, "setle ah\n");
             result->location.identifier = "rax";
             break;
@@ -531,7 +537,7 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         return result;
     }
     case P_FUNC:
-        _compile_func(c, scope, expr, a, depth);
+        _compile_func(c, scope, a, depth, expr);
         return NULL;
     case P_FUNC_CALL: {
         ExprNode *existing_func = NULL;
@@ -543,12 +549,12 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         }
 
         if (!existing_func) {
-            da_append(&c->external_funcs, expr->string_value);
+            _append_external_function(c, expr);
         }
 
         assert(expr->args.count <= 6); // TODO: ADD SUPORT TO MORE ARGS
         for (size_t i = 0; i < expr->args.count; i++) {
-            CNode *arg = _compile_expression(c, scope, expr->args.items[i], a, depth);
+            CNode *arg = _compile_expression(c, scope, a, depth, expr->args.items[i], "rax");
             fetch_node(c, a, depth, "rax", arg);
             asm_write(c, depth, "push rax\n");
         }
@@ -564,7 +570,6 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
             asm_fwrite(c, a, depth, "call %s\n", expr->string_value);
         }
 
-        CNode *result = node_create(a, expr);
         result->location.identifier = "rax";
         return result;
     }
@@ -585,19 +590,17 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
     case P_ASSIGN: {
         assert(expr->first->type == P_IDENTIFIER || expr->first->type == P_DEREF || expr->first->type == P_INDEX);
 
-        CNode *result = node_create(a, expr);
-
         switch (expr->first->type) {
         case P_IDENTIFIER: {
-            CNode *value = _compile_expression(c, scope, expr->second, a, depth);
+            CNode *value = _compile_expression(c, scope, a, depth, expr->second, result->location.identifier);
             _assign_var(c, scope, a, depth, node_create(a, expr->first), value);
             result->location = value->location;
         } break;
         case P_DEREF: {
-            CNode *id = _compile_expression(c, scope, expr->first->first, a, depth);
+            CNode *id = _compile_expression(c, scope, a, depth, expr->first->first, "rax");
             fetch_node(c, a, depth, "rax", id);
             asm_fwritel(c, a, depth, "push rax");
-            CNode *value = _compile_expression(c, scope, expr->second, a, depth);
+            CNode *value = _compile_expression(c, scope, a, depth, expr->second, "rdx");
             fetch_node(c, a, depth, "rdx", value);
             asm_fwritel(c, a, depth, "pop rax");
             asm_fwritel(c, a, depth, "mov [rax], rdx");
@@ -605,16 +608,16 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
             result->location.identifier = "rax";
         } break;
         case P_INDEX: {
-            CNode *id = _compile_expression(c, scope, expr->first->first, a, depth);
+            CNode *id = _compile_expression(c, scope, a, depth, expr->first->first, "rax");
             fetch_node(c, a, depth, "rax", id);
             asm_fwritel(c, a, depth, "push rax");
-            CNode *index = _compile_expression(c, scope, expr->first->second, a, depth);
+            CNode *index = _compile_expression(c, scope, a, depth, expr->first->second, "rdx");
             fetch_node(c, a, depth, "rdx", index);
             asm_fwritel(c, a, depth, "imul rdx, %d", ASM_WORD_SIZE);
             asm_fwritel(c, a, depth, "pop rax");
             asm_fwritel(c, a, depth, "add rax, rdx");
             asm_fwritel(c, a, depth, "push rax");
-            CNode *value = _compile_expression(c, scope, expr->second, a, depth);
+            CNode *value = _compile_expression(c, scope, a, depth, expr->second, "rdx");
             fetch_node(c, a, depth, "rdx", value);
             asm_fwritel(c, a, depth, "pop rax");
             asm_fwritel(c, a, depth, "mov [rax], rdx");
@@ -629,69 +632,59 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
     }
     case P_STRING: {
         CNode *existing = shget(c->data, expr->string_value);
-
         if (existing) {
-            CNode *value = node_create(a, expr);
-            value->location.type = ADDR;
-            value->location.identifier = existing->location.identifier;
-            return value;
+            result->location.type = ADDR;
+            result->location.identifier = existing->location.identifier;
+            return result;
         } else {
-            CNode *value = node_create(a, expr);
-            value->location.identifier = arena_strformat(a, "dat_%d", shlen(c->data));
-            value->location.type = STR;
-            shput(c->data, expr->string_value, value);
-            return value;
+            result->location.identifier = arena_strformat(a, "dat_%d", shlen(c->data));
+            result->location.type = STR;
+            shput(c->data, expr->string_value, result);
+            return result;
         }
     }
     case P_ARRAY: {
         assert(expr->first->type == P_IDENTIFIER);
         assert(expr->second->type == P_NUMBER);
-        CNode *id = node_create(a, expr->first);
-        _create_array(c, scope, a, depth, id, expr->second->number_value);
-        return id;
+        result->expr = expr->first;
+        _create_array(c, scope, a, depth, result, expr->second->number_value);
+        return result;
     }
     case P_INDEX: {
-        CNode *id = _compile_expression(c, scope, expr->first, a, depth);
+        CNode *id = _compile_expression(c, scope, a, depth, expr->first, "rax");
         fetch_node(c, a, depth, "rax", id);
         asm_fwritel(c, a, depth, "push rax");
-        CNode *index = _compile_expression(c, scope, expr->second, a, depth);
+        CNode *index = _compile_expression(c, scope, a, depth, expr->second, "rdx");
         fetch_node(c, a, depth, "rdx", index);
         asm_fwritel(c, a, depth, "imul rdx, %d", ASM_WORD_SIZE);
         asm_fwritel(c, a, depth, "pop rax");
         asm_fwritel(c, a, depth, "add rax, rdx");
-        asm_fwritel(c, a, depth, "mov rax, [rax]");
-        CNode *result = node_create(a, expr);
-        result->location.identifier = "rax";
+        asm_fwritel(c, a, depth, "mov %s, [rax]", result->location.identifier);
         return result;
     } break;
     case P_DEREF: {
-        CNode *id = _compile_expression(c, scope, expr->first, a, depth);
-        fetch_node(c, a, depth, "rax", id);
-        asm_fwritel(c, a, depth, "mov rax, [rax]");
-        CNode *result = node_create(a, expr);
-        result->location.identifier = "rax";
+        CNode *id = _compile_expression(c, scope, a, depth, expr->first, result->location.identifier);
+        fetch_node(c, a, depth, result->location.identifier, id);
+        asm_fwritel(c, a, depth, "mov %s, [%s]", result->location.identifier);
         return result;
     }
     case P_IF: {
         int if_id = ++scope->if_count;
 
-        CNode *result = node_create(a, expr);
-
-        CNode *cond = _compile_expression(c, scope, expr->first, a, depth);
-        fetch_node(c, a, depth, "rax", cond);
-        asm_fwritel(c, a, depth, "cmp rax, 0");
+        CNode *cond = _compile_expression(c, scope, a, depth, expr->first, result->location.identifier);
+        fetch_node(c, a, depth, result->location.identifier, cond);
+        asm_fwritel(c, a, depth, "cmp %s, 0", result->location.identifier);
         asm_fwritel(c, a, depth, "je .if_%d_else", if_id);
 
         if (expr->second) {
-            _compile_expression(c, scope, expr->second, a, depth + 1);
+            _compile_expression(c, scope, a, depth + 1, expr->second, "rax");
             asm_fwritel(c, a, depth + 1, "jmp .if_%d_end", if_id);
         }
         asm_fwritel(c, a, depth, ".if_%d_else:", if_id);
         if (expr->third) {
-            _compile_expression(c, scope, expr->third, a, depth + 1);
+            _compile_expression(c, scope, a, depth + 1, expr->third, "rax");
         }
         asm_fwritel(c, a, depth, ".if_%d_end:", if_id);
-        result->location.identifier = "rax";
         return result;
     }
     case P_BLOCK: {
@@ -704,13 +697,13 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         for (size_t i = 0; i < expr->count; i++) {
             ExprNode *current = expr->items[i];
             if (current->type == P_RETURN) {
-                CNode *child = _compile_expression(c, &block_scope, current->first, a, depth + 1);
+                CNode *child = _compile_expression(c, &block_scope, a, depth + 1, current->first, "rax");
                 fetch_node(c, a, depth + 1, "rax", child);
                 asm_fwritel(c, a, depth + 1, "jmp %s", block_scope.ret);
                 last = node_create(a, current);
                 continue;
             }
-            last = _compile_expression(c, &block_scope, current, a, depth);
+            last = _compile_expression(c, &block_scope, a, depth, current, "rax");
         }
 
         cscope_destroy(&block_scope);
@@ -720,15 +713,15 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         int while_id = ++scope->while_count;
 
         asm_fwritel(c, a, depth, ".%s_while_%d_cond:", scope->identifier, while_id);
-        CNode *cond = _compile_expression(c, scope, expr->first, a, depth + 1);
+        CNode *cond = _compile_expression(c, scope, a, depth + 1, expr->first, "rax");
         fetch_node(c, a, depth + 1, "rax", cond);
         asm_fwritel(c, a, depth + 1, "cmp rax, 0");
         asm_fwritel(c, a, depth + 1, "je .%s_while_%d_end", scope->identifier, while_id);
         asm_fwritel(c, a, depth, ".%s_while_%d_body:", scope->identifier, while_id);
-        _compile_expression(c, scope, expr->second, a, depth + 1);
+        _compile_expression(c, scope, a, depth + 1, expr->second, "rax");
         asm_fwritel(c, a, depth, "jmp .%s_while_%d_cond", scope->identifier, while_id);
         asm_fwritel(c, a, depth, ".%s_while_%d_end:", scope->identifier, while_id);
-        return node_create(a, expr);
+        return result;
     }
     case P_CHAR:
     case P_DIV:
