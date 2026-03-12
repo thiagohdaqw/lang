@@ -1,9 +1,10 @@
 a = 3
-enquanto a:
-    a = a - 1
+b = 10
 
-    out = "hello\n"
+out = "hello\n"
+enquanto b == 10 e a > 0 ou a > 3:
     write(1, out, strlen(out))
+    a = a-1
 fim
 
-retorne a
+retorne 69

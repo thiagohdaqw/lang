@@ -1,0 +1,30 @@
+## TODO
+
+- [-] - Variaveis
+  - [x] - Inteiro 64bits
+  - [] - Inteiro 32bits
+  - [] - Float 64bits
+  - [] - Float 32bits
+- [x] - Condicional
+- [x] - Repetição
+  - [x] - While
+  - [] - For
+- [x] - Funções
+- [x] - Operadores lógicos
+- [-] - Arrays
+  - [x] - Arrays de 64bits
+    - [x] - Alocação na stack
+    - [x] - Acesso em indice
+    - [x] - Atribuição em indice
+  - [] - Arrays de 32bits
+  - [] - Arrays de 8bits
+- [x] - Ponteiros
+  - [x] - Dereferenciamento
+- [-] - Strings
+  - [x] - Strings fixas
+  - [] - Strings modificaveis (depende de suporte a arrays de 1 byte)
+- [x] - Link com a GLIBC
+- [] - Construção de uma biblioteca padrão
+  - [] - IO
+    - [] - escreva(a, b, ...) / print()
+    - [] - leia()
