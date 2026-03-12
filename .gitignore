@@ -1,4 +1,4 @@
 bin/
-.pypt_build/
+# .pypt_build/
 *.o
 main
