@@ -1,0 +1,8 @@
+exporte func escreva(texto):
+    write(1, texto, strlen(texto))
+fim
+
+exporte func escreval(texto):
+    escreva(texto)
+    escreva("\n")
+fim

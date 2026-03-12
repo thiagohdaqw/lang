@@ -7,22 +7,28 @@
 typedef enum {
     NONE,
     ASM,
-} CompilerTypes;
+} CompilerTarget;
 
 typedef struct {
-    CompilerTypes type;
+    CompilerTarget target;
+    const char *build_folder;
+    const char *entry_path;
+    const char *output;
+    bool output_object;
+    const char *c_args;
+    const char *linker_args;
+} CompilerConfig;
+
+typedef struct {
     AsmCompiler asm_compiler;
 
     Arena allocator;
-    const char *build_folder;
-    const char *entry_path;
-    const char *output_executable_path;
-    const char *c_args;
-    const char *linker_args;
+
+    CompilerConfig config;
 } Compiler;
 
-Compiler compiler_create(CompilerTypes type, const char *build_folder, const char *output_executable_path,
-                         const char *c_args, const char *linker_args);
+void compiler_parse_args(CompilerConfig *config, int argc, char **argv);
+Compiler compiler_create(CompilerConfig config);
 void compiler_destroy(Compiler *c);
 bool compiler_init(Compiler *c);
 void compiler_append_expression(Compiler *c, ExprNode *expr);
@@ -36,18 +42,13 @@ void compiler_compile(Compiler *c);
 #include <assert.h>
 #include <stdio.h>
 
-Compiler compiler_create(CompilerTypes type, const char *build_folder, const char *output_executable_path,
-                         const char *c_args, const char *linker_args) {
+Compiler compiler_create(CompilerConfig config) {
     Compiler c = {0};
 
-    c.type = type;
-    c.build_folder = build_folder;
-    c.output_executable_path = output_executable_path;
-    c.c_args = c_args;
-    c.linker_args = linker_args;
+    c.config = config;
     c.allocator = arena_create(4 * 1024);
 
-    switch (type) {
+    switch (c.config.target) {
     case ASM:
         c.asm_compiler = asm_compiler_create();
         break;
@@ -60,7 +61,7 @@ Compiler compiler_create(CompilerTypes type, const char *build_folder, const cha
 
 void compiler_destroy(Compiler *c) {
     arena_destroy(&c->allocator);
-    switch (c->type) {
+    switch (c->config.target) {
     case ASM:
         asm_compiler_destroy(&c->asm_compiler);
         break;
@@ -75,8 +76,8 @@ static void _create_c_entry(Compiler *c) {
                           "    return pypt_main(argc, argv);\n"
                           "}\n";
 
-    c->entry_path = arena_strjoin(&c->allocator, c->build_folder, "entry.c");
-    FILE *entry = file_create(c->entry_path);
+    c->config.entry_path = arena_strjoin(&c->allocator, c->config.build_folder, "entry.c");
+    FILE *entry = file_create(c->config.entry_path);
 
     file_write(entry, c_entry);
 
@@ -86,9 +87,9 @@ static void _create_c_entry(Compiler *c) {
 bool compiler_init(Compiler *c) {
     _create_c_entry(c);
 
-    switch (c->type) {
+    switch (c->config.target) {
     case ASM:
-        return asm_compiler_init(&c->asm_compiler, c->build_folder);
+        return asm_compiler_init(&c->asm_compiler, c->config.build_folder, c->config.output_object);
         break;
     default:
         assert(0 && "Compiler type not implemented");
@@ -96,7 +97,7 @@ bool compiler_init(Compiler *c) {
 }
 
 void compiler_append_expression(Compiler *c, ExprNode *expr) {
-    switch (c->type) {
+    switch (c->config.target) {
     case ASM:
         asm_compiler_append_expression(&c->asm_compiler, expr);
         break;
@@ -108,11 +109,11 @@ void compiler_append_expression(Compiler *c, ExprNode *expr) {
 void compiler_compile(Compiler *c) {
     ArenaNode saved = arena_save(&c->allocator);
 
-    const char *output_object_path = arena_strjoin(&c->allocator, c->build_folder, "out.o");
+    const char *output_object_path = arena_strjoin(&c->allocator, c->config.build_folder, "out.o");
 
-    switch (c->type) {
+    switch (c->config.target) {
     case ASM:
-        asm_compiler_generate_assembly(&c->asm_compiler);
+        asm_compiler_generate_assembly(&c->asm_compiler, !c->config.output_object);
         if (!asm_compiler_compile(&c->asm_compiler, output_object_path)) {
             return;
         }
@@ -121,20 +122,34 @@ void compiler_compile(Compiler *c) {
         assert(0 && "Compiler type not implemented");
     }
 
-    char *compile_command = arena_strformat(&c->allocator,
-        "gcc -no-pie %s %s %s -o %s %s",
-        c->c_args,
-        c->entry_path,
-        output_object_path,
-        c->output_executable_path,
-        c->linker_args
-    );
+    if (!c->config.output_object) {
+        char *stdlib = arena_strformat(&c->allocator, "%sstdlib/*.o", c->config.build_folder);
+        char *compile_command =
+            arena_strformat(&c->allocator, "gcc -no-pie %s %s %s %s -o %s %s",
+                c->config.c_args,
+                stdlib,
+                c->config.entry_path,
+                output_object_path,
+                c->config.output,
+                c->config.linker_args);
 
-    printf("Executing: %s\n", compile_command);
-    int ret = system(compile_command);
-    printf("Returned: %d\n", ret);
+        printf("Executing: %s\n", compile_command);
+        int ret = system(compile_command);
+        printf("Returned: %d\n", ret);
+    }
 
     arena_rewind(&c->allocator, saved);
+}
+
+void compiler_parse_args(CompilerConfig *config, int argc, char **argv) {
+    for (size_t i = 2; i < argc; i++) {
+        char *arg = argv[i];
+        if (strcmp("-o", arg) == 0 && i + 1 < argc) {
+            config->output = argv[i++];
+        } else if (strcmp("-C", arg) == 0) {
+            config->output_object = true;
+        }
+    }
 }
 
 #endif

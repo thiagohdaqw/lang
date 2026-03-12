@@ -68,6 +68,7 @@ typedef struct {
 
     CExternalFuncs external_funcs;
     CBlock funcs;
+    CBlock export_funcs;
     CBlock main;
     CScope main_scope;
 
@@ -75,13 +76,10 @@ typedef struct {
 } AsmCompiler;
 
 AsmCompiler asm_compiler_create();
-bool asm_compiler_init(AsmCompiler *c, const char *build_folder);
+bool asm_compiler_init(AsmCompiler *c, const char *build_folder, bool output_object);
 void asm_compiler_destroy(AsmCompiler *c);
 void asm_compiler_append_expression(AsmCompiler *c, ExprNode *expr);
-void asm_compiler_generate_assembly(AsmCompiler *c);
-void _generate_func_section(AsmCompiler *c);
-void _generate_data_section(AsmCompiler *c);
-void _generate_external_funcs_section(AsmCompiler *c);
+void asm_compiler_generate_assembly(AsmCompiler *c, bool output_main);
 bool asm_compiler_compile(AsmCompiler *c, const char *object_output_path);
 
 #endif // __ASM_COMPILER_H_INCLUDED__
@@ -139,20 +137,23 @@ void asm_compiler_destroy(AsmCompiler *c) {
     c->data = NULL;
 }
 
-bool asm_compiler_init(AsmCompiler *c, const char *build_folder) {
+bool asm_compiler_init(AsmCompiler *c, const char *build_folder, bool output_object) {
     c->asm_file_path = arena_strjoin(&c->allocator, build_folder, "output.asm");
     c->asm_file = file_create(c->asm_file_path);
 
-    const char *fasm_entry = "format ELF64\n"
-                             "public pypt_main\n\n"
-                             "section '.text' executable align 16\n\n";
-
-    file_write(c->asm_file, fasm_entry);
+    file_write(c->asm_file, "format ELF64\n");
+    if (!output_object) {
+        file_write(c->asm_file, "public pypt_main\n");
+    }
+    file_write(c->asm_file, "section '.text' executable align 16\n\n");
     return true;
 }
 
 void asm_compiler_append_expression(AsmCompiler *c, ExprNode *expr) {
     if (expr->type == P_FUNC) {
+        if (expr->exportable) {
+            da_append(&c->export_funcs, expr);
+        }
         da_append(&c->funcs, expr);
         return;
     }
@@ -195,12 +196,12 @@ static void fetch_node(AsmCompiler *c, Arena *a, int depth, const char *reg, CNo
 }
 
 static CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena *a, int depth);
+static void _generate_export_funcs_section(AsmCompiler *c);
+static void _generate_func_section(AsmCompiler *c);
+static void _generate_external_funcs_section(AsmCompiler *c);
+static void _generate_data_section(AsmCompiler *c);
 
-void asm_compiler_generate_assembly(AsmCompiler *c) {
-    ArenaNode saved = arena_save(&c->allocator);
-
-    _generate_func_section(c);
-
+void _generate_main_section(AsmCompiler *c) {
     asm_write(c, 0, "pypt_main:\n");
     asm_write(c, 1, "push rbp\n");
     asm_write(c, 1, "mov rbp, rsp\n\n");
@@ -230,6 +231,17 @@ void asm_compiler_generate_assembly(AsmCompiler *c) {
     asm_write(c, 1, "mov rsp, rbp\n");
     asm_write(c, 1, "pop rbp\n");
     asm_write(c, 1, "ret\n\n");
+}
+
+void asm_compiler_generate_assembly(AsmCompiler *c, bool output_main) {
+    ArenaNode saved = arena_save(&c->allocator);
+
+    _generate_export_funcs_section(c);
+    _generate_func_section(c);
+
+    if (output_main) {
+        _generate_main_section(c);
+    }
 
     _generate_external_funcs_section(c);
 
@@ -239,6 +251,15 @@ void asm_compiler_generate_assembly(AsmCompiler *c) {
 
     fclose(c->asm_file);
     arena_rewind(&c->allocator, saved);
+}
+
+void _generate_export_funcs_section(AsmCompiler *c) {
+    asm_fwritel(c, &c->allocator, 0, "\n; Public Functions");
+    for (size_t i = 0; i < c->export_funcs.count; i++) {
+        asm_fwritel(c, &c->allocator, 0, "public %s", c->export_funcs.items[i]->string_value);
+    }
+
+    asm_fwritel(c, &c->allocator, 0, "; End Public Functions\n");
 }
 
 void _generate_func_section(AsmCompiler *c) {
@@ -358,6 +379,55 @@ static void _create_array(AsmCompiler *c, CScope *s, Arena *a, int depth, CNode 
     shput(s->vars, identifier->expr->string_value, identifier);
 }
 
+void _compile_func(AsmCompiler *c, CScope *s, ExprNode *expr, Arena *a, int depth) {
+    char *prefix = expr->exportable ? "" : "func_";
+
+    asm_fwrite(c, a, depth, "%s%s:\n", prefix, expr->string_value);
+    asm_write(c, depth + 1, "push rbp\n");
+    asm_write(c, depth + 1, "mov rbp, rsp\n\n");
+
+    CScope func_scope =
+        cscope_create(expr->string_value, NULL, arena_strformat(a, "%s%s_ret", prefix, expr->string_value));
+
+    assert(expr->args.count <= 6); // TODO: ADD SUPORT TO MORE ARGS
+
+    for (size_t i = 0; i < expr->args.count; i++) {
+        ExprNode *arg = expr->args.items[i];
+        assert(arg->type == P_IDENTIFIER);
+
+        CNode *arg_node = node_create(a, arg);
+        arg_node->location.identifier = ARG_REGS[i];
+
+        _assign_var(c, &func_scope, a, depth + 1, arg_node, arg_node);
+    }
+
+    CNode *last = NULL;
+    ExprNode *block_node = expr->first;
+    for (size_t i = 0; i < block_node->count; i++) {
+        ExprNode *current = block_node->items[i];
+        if (current->type == P_RETURN) {
+            CNode *child = _compile_expression(c, &func_scope, current->first, a, depth + 1);
+            fetch_node(c, a, depth + 1, "rax", child);
+            asm_fwrite(c, a, depth + 1, "jmp %s\n", func_scope.ret);
+            last = node_create(a, current);
+            continue;
+        }
+        last = _compile_expression(c, &func_scope, current, a, depth + 1);
+    }
+
+    if (last && last->expr->type != P_RETURN && last->location.identifier) {
+        fetch_node(c, a, depth + 1, "rax", last);
+    }
+
+    asm_fwrite(c, a, depth, "%s:\n", func_scope.ret);
+    asm_write(c, depth + 1, "mov rsp, rbp\n");
+    asm_write(c, depth + 1, "pop rbp\n");
+    asm_write(c, depth + 1, "ret\n");
+    asm_fwrite(c, a, depth + 1, "; END %s%s\n\n", prefix, expr->string_value);
+
+    cscope_destroy(&func_scope);
+}
+
 CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena *a, int depth) {
     switch (expr->type) {
     case P_NUMBER: {
@@ -411,9 +481,9 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
 
         CNode *result = node_create(a, expr);
         result->location.identifier = "rcx";
-        
+
         switch (expr->type) {
-            case P_MULT:
+        case P_MULT:
             asm_write(c, depth, "imul rcx, rdx\n");
             break;
         case P_PLUS:
@@ -460,63 +530,19 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
         }
         return result;
     }
-    case P_FUNC: {
-        asm_fwrite(c, a, depth, "func_%s:\n", expr->string_value);
-        asm_write(c, depth + 1, "push rbp\n");
-        asm_write(c, depth + 1, "mov rbp, rsp\n\n");
-
-        CScope func_scope =
-            cscope_create(expr->string_value, NULL, arena_strformat(a, "func_%s_ret", expr->string_value));
-
-        assert(expr->args.count <= 6); // TODO: ADD SUPORT TO MORE ARGS
-
-        for (size_t i = 0; i < expr->args.count; i++) {
-            ExprNode *arg = expr->args.items[i];
-            assert(arg->type == P_IDENTIFIER);
-
-            CNode *arg_node = node_create(a, arg);
-            arg_node->location.identifier = ARG_REGS[i];
-
-            _assign_var(c, &func_scope, a, depth + 1, arg_node, arg_node);
-        }
-
-        CNode *last = NULL;
-        ExprNode *block_node = expr->first;
-        for (size_t i = 0; i < block_node->count; i++) {
-            ExprNode *current = block_node->items[i];
-            if (current->type == P_RETURN) {
-                CNode *child = _compile_expression(c, &func_scope, current->first, a, depth + 1);
-                fetch_node(c, a, depth + 1, "rax", child);
-                asm_fwrite(c, a, depth + 1, "jmp %s\n", func_scope.ret);
-                last = node_create(a, current);
-                continue;
-            }
-            last = _compile_expression(c, &func_scope, current, a, depth + 1);
-        }
-
-        if (last && last->expr->type != P_RETURN && last->location.identifier) {
-            fetch_node(c, a, depth + 1, "rax", last);
-        }
-
-        asm_fwrite(c, a, depth, "%s:\n", func_scope.ret);
-        asm_write(c, depth + 1, "mov rsp, rbp\n");
-        asm_write(c, depth + 1, "pop rbp\n");
-        asm_write(c, depth + 1, "ret\n");
-        asm_fwrite(c, a, depth + 1, "; END func_%s\n\n", expr->string_value);
-
-        cscope_destroy(&func_scope);
-        break;
-    }
+    case P_FUNC:
+        _compile_func(c, scope, expr, a, depth);
+        return NULL;
     case P_FUNC_CALL: {
-        bool func_exists = false;
+        ExprNode *existing_func = NULL;
         for (size_t i = 0; i < c->funcs.count; i++) {
             if (strcmp(expr->string_value, c->funcs.items[i]->string_value) == 0) {
-                func_exists = true;
+                existing_func = c->funcs.items[i];
                 break;
             }
         }
 
-        if (!func_exists) {
+        if (!existing_func) {
             da_append(&c->external_funcs, expr->string_value);
         }
 
@@ -531,8 +557,9 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, ExprNode *expr, Arena 
             asm_fwrite(c, a, depth, "pop %s\n", ARG_REGS[i]);
         }
 
-        if (func_exists) {
-            asm_fwrite(c, a, depth, "call func_%s\n", expr->string_value);
+        if (existing_func) {
+            char *prefix = existing_func->exportable ? "" : "func_";
+            asm_fwrite(c, a, depth, "call %s%s\n", prefix, expr->string_value);
         } else {
             asm_fwrite(c, a, depth, "call %s\n", expr->string_value);
         }

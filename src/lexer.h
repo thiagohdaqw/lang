@@ -33,6 +33,7 @@ typedef enum token_t {
     T_GEQUAL,
     T_END,
     T_FUNC,
+    T_EXPORT,
     T_IF,
     T_ELSE,
     T_WHILE,
@@ -310,6 +311,8 @@ static bool parse_identifier(Lexer *lexer) {
         lexer->token.type = T_AND;
     } else if (strcmp(id, "ou") == 0) {
         lexer->token.type = T_OR;
+    } else if (strcmp(id, "exporte") == 0) {
+        lexer->token.type = T_EXPORT;
     }
 
     return true;

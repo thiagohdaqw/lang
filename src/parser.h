@@ -52,6 +52,7 @@ typedef struct op_node_t {
     char *string_value;
 
     bool returned;
+    bool exportable;
 
     ExprNode *first;
     ExprNode *second;
@@ -313,6 +314,8 @@ static ExprNode *_parse_funcall(Arena *arena, Lexer *lexer);
 
 static ExprNode *_parse_func(Lexer *lexer, Arena *arena);
 
+static ExprNode *_parse_export(Lexer *lexer, Arena *arena);
+
 static ExprNode *_parse_if(Lexer *lexer, Arena *arena);
 
 static ExprNode *_parse_while(Lexer *lexer, Arena *arena);
@@ -344,6 +347,8 @@ static ExprNode *_parse_prefix(Lexer *lexer, Arena *arena) {
         return _parse_identifier(lexer, arena);
     case T_FUNC:
         return _parse_func(lexer, arena);
+    case T_EXPORT:
+        return _parse_export(lexer, arena);
     case T_IF:
         return _parse_if(lexer, arena);
     case T_WHILE:
@@ -485,6 +490,13 @@ static ExprNode *_parse_func(Lexer *lexer, Arena *arena) {
     func->first = _parse_block(lexer, arena, T_END);
 
     lexer_expect_token(lexer, T_END);
+    return func;
+}
+
+static ExprNode *_parse_export(Lexer *lexer, Arena *arena) {
+    lexer_expect_token(lexer, T_FUNC);
+    ExprNode *func = _parse_func(lexer, arena);
+    func->exportable = true;
     return func;
 }
 

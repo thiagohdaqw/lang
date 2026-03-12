@@ -26,10 +26,11 @@
 - [-] - Strings
   - [x] - Strings fixas
   - [] - Strings modificaveis (depende de suporte a arrays de 1 byte)
+- [] - Comentários
 - [x] - Link com a GLIBC
 - [] - Construção de uma biblioteca padrão
   - [] - IO
-    - [] - escreva(a, b, ...) / print()
+    - [-] - escreva(a, b, ...) / print()
     - [] - leia()
 - [] - Melhorias
   - [] - Se assemelhar a sintaxe do python

@@ -10,8 +10,8 @@
 #include "utils/file.h"
 #include "utils/stb_ds.h"
 
-int interpret(int argc, char** argv) {
-    Lexer lexer = { 0 };
+int interpret(int argc, char **argv) {
+    Lexer lexer = {0};
     if (!lexer_init(&lexer, argv[1])) {
         return 1;
     }
@@ -22,7 +22,7 @@ int interpret(int argc, char** argv) {
     Interpreter interpreter = interpreter_create(&arena, &temp_arena);
 
     while (1) {
-        ExprNode* expr = parser_parse_expression(&lexer, &arena);
+        ExprNode *expr = parser_parse_expression(&lexer, &arena);
         if (expr == NULL) {
             if (lexer_is_eof(&lexer)) break;
             continue;
@@ -37,24 +37,28 @@ int interpret(int argc, char** argv) {
     return ret;
 }
 
-int compile(int argc, char** argv) {
-    const char* build_folder = "./.pypt_build/";
-    const char* executable_output_path = "main";
-    const char* compiler_c_args = "";
-    const char* compiler_linker_args = "";
-    CompilerTypes compiler_type = ASM;
+int compile(int argc, char **argv) {
+    CompilerConfig config = {
+        .build_folder = "./.pypt_build/",
+        .output = "main",
+        .linker_args = "",
+        .c_args = "",
+        .target = ASM,
+    };
 
-    if (!folder_create(build_folder, 0755)) {
+    compiler_parse_args(&config, argc, argv);
+
+    if (!folder_create(config.build_folder, 0755)) {
         return 1;
     }
 
-    Compiler compiler = compiler_create(compiler_type, build_folder, executable_output_path, compiler_c_args, compiler_linker_args);
+    Compiler compiler = compiler_create(config);
 
     if (!compiler_init(&compiler)) {
         return 1;
     }
 
-    Lexer lexer = { 0 };
+    Lexer lexer = {0};
     if (!lexer_init(&lexer, argv[1])) {
         return 1;
     }
@@ -62,7 +66,7 @@ int compile(int argc, char** argv) {
     Arena arena = arena_create(4 * 1024);
 
     while (1) {
-        ExprNode* expr = parser_parse_expression(&lexer, &arena);
+        ExprNode *expr = parser_parse_expression(&lexer, &arena);
         if (expr == NULL) {
             if (lexer_is_eof(&lexer)) break;
             continue;
@@ -78,7 +82,7 @@ int compile(int argc, char** argv) {
     return 0;
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     if (argc < 2) {
         fprintf(stderr, "[MAIN]: No file path specified\n");
         fprintf(stderr, "[MAIN]: Usage: %s <file_path>\n", argv[0]);

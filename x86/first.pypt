@@ -1,10 +1,7 @@
-a = 3
-b = 10
-
-out = "hello\n"
-enquanto b == 10 e a > 0 ou a > 3:
-    write(1, out, strlen(out))
-    a = a-1
+func hello():
+    escreval("ola")
 fim
+
+hello()
 
 retorne 69
