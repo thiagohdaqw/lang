@@ -1,11 +1,17 @@
-a = 3
-b = 10
+a<1>[10];
 
-enquanto a > 0 e b > 0:
-    escreval("...")
-    a = a-1
+a[0] = 'h'
+a[1] = 'e'
+a[2] = 'l'
+a[3] = 'l'
+a[4] = 'o'
+a[5] = '\n'
+
+escreva(a)
+
+b = 8
+
+enquanto b > 5:
+    escreval("ola")
     b = b-1
 fim
-
-escreval("Fim")
-retorne 1 + 2

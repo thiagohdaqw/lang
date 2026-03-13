@@ -10,62 +10,103 @@ pypt_main:
     push rbp
     mov rbp, rsp
 
-    mov rax, 3
+    sub rsp, 8
+    mov rax, rsp
     push rax
-    mov rax, 10
+    mov rax, [rbp-16]
+    push rax
+    mov rdx, 0
+    imul rdx, 1
+    pop rax
+    add rax, rdx
+    push rax
+    mov rdx, 104
+    pop rax
+    or [rax], dl
+    mov rax, [rbp-16]
+    push rax
+    mov rdx, 1
+    imul rdx, 1
+    pop rax
+    add rax, rdx
+    push rax
+    mov rdx, 101
+    pop rax
+    or [rax], dl
+    mov rax, [rbp-16]
+    push rax
+    mov rdx, 2
+    imul rdx, 1
+    pop rax
+    add rax, rdx
+    push rax
+    mov rdx, 108
+    pop rax
+    or [rax], dl
+    mov rax, [rbp-16]
+    push rax
+    mov rdx, 3
+    imul rdx, 1
+    pop rax
+    add rax, rdx
+    push rax
+    mov rdx, 108
+    pop rax
+    or [rax], dl
+    mov rax, [rbp-16]
+    push rax
+    mov rdx, 4
+    imul rdx, 1
+    pop rax
+    add rax, rdx
+    push rax
+    mov rdx, 111
+    pop rax
+    or [rax], dl
+    mov rax, [rbp-16]
+    push rax
+    mov rdx, 5
+    imul rdx, 1
+    pop rax
+    add rax, rdx
+    push rax
+    mov rdx, 10
+    pop rax
+    or [rax], dl
+    mov rax, [rbp-16]
+    push rax
+
+    pop rdi
+    call escreva
+    mov rax, 8
     push rax
     .pypt_main_while_1_cond:
-        mov rax, [rbp-8]
+        mov rax, [rbp-24]
         push rax
-        mov rdx, 0
-        pop rcx
+        mov rcx, 5
+        pop rdx
         xor rax, rax
-        cmp rcx, rdx
+        cmp rdx, rcx
         setg ah
-        push rax
-        mov rax, [rbp-16]
-        push rax
-        mov rdx, 0
-        pop rcx
-        xor rax, rax
-        cmp rcx, rdx
-        setg ah
-        mov rdx, rax
-        pop rcx
-        and rcx, rdx
-        mov rax, rcx
         cmp rax, 0
         je .pypt_main_while_1_end
     .pypt_main_while_1_body:
         mov rax, dat_0
         push rax
+
         pop rdi
         call escreval
-        mov rax, [rbp-8]
+        mov rax, [rbp-24]
         push rax
-        mov rdx, 1
-        neg rdx
-        pop rcx
-        add rcx, rdx
-        mov [rbp-8], rcx
-        mov rax, [rbp-16]
-        push rax
-        mov rdx, 1
-        neg rdx
-        pop rcx
-        add rcx, rdx
-        mov [rbp-16], rcx
+        mov rcx, 1
+        neg rcx
+        pop rdx
+        add rdx, rcx
+        mov [rbp-24], rdx
     jmp .pypt_main_while_1_cond
     .pypt_main_while_1_end:
-    mov rax, dat_1
-    push rax
-    pop rdi
-    call escreval
-    mov rax, 1
-    push rax
-    mov rdx, 2
-    pop rcx
-    add rcx, rdx
+    mov rcx, rax
+    xor rax, rax
     mov rax, rcx
 pypt_main_ret:
     mov rsp, rbp
@@ -73,10 +114,10 @@ pypt_main_ret:
     ret
 
 ; External funcs
+extrn escreva
 extrn escreval
 
 ; Data section
 section '.data'
-    dat_0 db "...",0
-    dat_1 db "Fim",0
+    dat_0 db "ola",0
 

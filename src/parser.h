@@ -50,6 +50,7 @@ typedef struct op_node_t {
     int length;
     char char_value;
     char *string_value;
+    int size;
 
     bool returned;
     bool exportable;
@@ -136,12 +137,14 @@ ExprNode *node_binop(Arena *a, TokenType type, ExprNode *left, ExprNode *right) 
     return node;
 }
 
-ExprNode *node_identifier(Arena *a, const char *value) {
+ExprNode *_node_identifier(Arena *a, const char *value, int size) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->type = P_IDENTIFIER;
     node->string_value = arena_strdup(a, value);
+    node->size = size;
     return node;
 }
+ExprNode *node_identifier(Arena *a, const char *value) { return _node_identifier(a, value, 0); }
 
 ExprNode *node_assign(Arena *a, ExprNode *left, ExprNode *right) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
@@ -155,6 +158,13 @@ ExprNode *node_string(Arena *a, const char *value) {
     ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
     node->type = P_STRING;
     node->string_value = arena_strdup(a, value);
+    return node;
+}
+
+ExprNode *node_char(Arena *a, char value) {
+    ExprNode *node = (ExprNode *)arena_alloc(a, sizeof(*node));
+    node->type = P_CHAR;
+    node->char_value = value;
     return node;
 }
 
@@ -341,6 +351,8 @@ static ExprNode *_parse_prefix(Lexer *lexer, Arena *arena) {
         return node_number(arena, (double)lexer->token.long_value);
     case T_DOUBLE:
         return node_number(arena, lexer->token.double_value);
+    case T_CHAR:
+        return node_char(arena, lexer->token.char_value);
     case T_STRING:
         return node_string(arena, lexer->token.string_value);
     case T_IDENTIFIER:
@@ -476,7 +488,7 @@ static ExprNode *_parse_func(Lexer *lexer, Arena *arena) {
 
     while (lexer_peek_next_char(lexer) != ')') {
         lexer_expect_token(lexer, T_IDENTIFIER);
-        ExprNode *arg = node_identifier(arena, lexer->token.identifier_value);
+        ExprNode *arg = _parse_identifier(lexer, arena);
         da_append(&func->args, arg);
 
         if (lexer_peek_next_char(lexer) != ',') {
@@ -501,14 +513,23 @@ static ExprNode *_parse_export(Lexer *lexer, Arena *arena) {
 }
 
 static ExprNode *_parse_identifier(Lexer *lexer, Arena *arena) {
+    int size = 0;
+
     switch (lexer_peek_next_char(lexer)) {
     case '(':
         return _parse_funcall(arena, lexer);
+    case '<': {
+        lexer_next_token(lexer);
+        lexer_expect_token(lexer, T_LONG);
+        size = lexer->token.long_value;
+
+        lexer_expect_token(lexer, T_GREATER);
+    }
     case '[': {
         Reader reader = lexer_save_reader(lexer);
 
         lexer_next_token(lexer);
-        ExprNode *id = node_identifier(arena, lexer->token.identifier_value);
+        ExprNode *id = _node_identifier(arena, lexer->token.identifier_value, size);
         ExprNode *index = parser_parse_expression(lexer, arena);
         lexer_expect_literal(lexer, ']');
 
@@ -517,11 +538,11 @@ static ExprNode *_parse_identifier(Lexer *lexer, Arena *arena) {
             return node_array(arena, id, index);
         } else {
             lexer_rewind_reader(lexer, reader);
-            return node_identifier(arena, lexer->token.identifier_value);
+            return _node_identifier(arena, lexer->token.identifier_value, size);
         }
     } break;
     default:
-        return node_identifier(arena, lexer->token.identifier_value);
+        return _node_identifier(arena, lexer->token.identifier_value, size);
     }
 }
 

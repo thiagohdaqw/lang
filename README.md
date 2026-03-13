@@ -3,6 +3,8 @@
 - [-] - Variaveis
   - [x] - Inteiro 64bits
   - [] - Inteiro 32bits
+  - [] - Inteiro 16bits
+  - [] - Inteiro 8bits
   - [] - Float 64bits
   - [] - Float 32bits
 - [-] - Condicional
@@ -19,8 +21,9 @@
     - [x] - Alocação na stack
     - [x] - Acesso em indice
     - [x] - Atribuição em indice
-  - [] - Arrays de 32bits
-  - [] - Arrays de 8bits
+  - [-] - Arrays de 32bits
+  - [-] - Arrays de 16bits
+  - [x] - Arrays de 8bits
 - [x] - Ponteiros
   - [x] - Dereferenciamento
 - [-] - Strings
