@@ -664,7 +664,7 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, Arena *a, int depth, E
             CNode *value = _compile_expression(c, scope, a, depth, expr->second, RDX_ARG, word_size);
             fetch_node(c, a, depth, RDX_ARG[word_size], value);
             asm_fwritel(c, a, depth, "pop %s", RAX_ARG[word_size]);
-            asm_fwritel(c, a, depth, "or [%s], %s", RAX_ARG[WORD64], RDX_ARG[word_size]);
+            asm_fwritel(c, a, depth, "mov [%s], %s", RAX_ARG[WORD64], RDX_ARG[word_size]);
             result->location.type = REG;
             result->location.identifier = RAX_ARG[word_size];
         } break;
@@ -685,7 +685,7 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, Arena *a, int depth, E
             asm_fwritel(c, a, depth, "pop %s", RAX_ARG[word_size]);
 
             word_size = wordsize_index(id->expr->size);
-            asm_fwritel(c, a, depth, "or [%s], %s", RAX_ARG[WORD64], RDX_ARG[word_size]);
+            asm_fwritel(c, a, depth, "mov [%s], %s", RAX_ARG[WORD64], RDX_ARG[word_size]);
             result->location.type = REG;
             result->location.identifier = RAX_ARG[WORD64];
         } break;

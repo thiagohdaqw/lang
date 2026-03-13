@@ -22,7 +22,7 @@ pypt_main:
     push rax
     mov rdx, 104
     pop rax
-    or [rax], dl
+    mov [rax], dl
     mov rax, [rbp-16]
     push rax
     mov rdx, 1
@@ -32,7 +32,7 @@ pypt_main:
     push rax
     mov rdx, 101
     pop rax
-    or [rax], dl
+    mov [rax], dl
     mov rax, [rbp-16]
     push rax
     mov rdx, 2
@@ -42,7 +42,7 @@ pypt_main:
     push rax
     mov rdx, 108
     pop rax
-    or [rax], dl
+    mov [rax], dl
     mov rax, [rbp-16]
     push rax
     mov rdx, 3
@@ -52,7 +52,7 @@ pypt_main:
     push rax
     mov rdx, 108
     pop rax
-    or [rax], dl
+    mov [rax], dl
     mov rax, [rbp-16]
     push rax
     mov rdx, 4
@@ -62,7 +62,7 @@ pypt_main:
     push rax
     mov rdx, 111
     pop rax
-    or [rax], dl
+    mov [rax], dl
     mov rax, [rbp-16]
     push rax
     mov rdx, 5
@@ -72,7 +72,7 @@ pypt_main:
     push rax
     mov rdx, 10
     pop rax
-    or [rax], dl
+    mov [rax], dl
     mov rax, [rbp-16]
     push rax
 
