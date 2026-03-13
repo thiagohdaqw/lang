@@ -487,8 +487,7 @@ static ExprNode *_parse_func(Lexer *lexer, Arena *arena) {
     lexer_expect_token(lexer, T_OPAREN);
 
     while (lexer_peek_next_char(lexer) != ')') {
-        lexer_expect_token(lexer, T_IDENTIFIER);
-        ExprNode *arg = _parse_identifier(lexer, arena);
+        ExprNode *arg = parser_parse_expression(lexer, arena);
         da_append(&func->args, arg);
 
         if (lexer_peek_next_char(lexer) != ',') {

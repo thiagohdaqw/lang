@@ -1,17 +1,2 @@
-a<1>[10];
-
-a[0] = 'h'
-a[1] = 'e'
-a[2] = 'l'
-a[3] = 'l'
-a[4] = 'o'
-a[5] = '\n'
-
-escreva(a)
-
-b = 8
-
-enquanto b > 5:
-    escreval("ola")
-    b = b-1
-fim
+escrevaf("%d %d %s\n", 69, 41, "ola mundo")
+retorne 69

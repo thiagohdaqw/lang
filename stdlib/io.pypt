@@ -6,3 +6,7 @@ exporte func escreval(texto):
     escreva(texto)
     escreva("\n")
 fim
+
+exporte func escrevaf(formato, a, b, c, d, f):
+    printf(formato, a, b, c, d, f)
+fim
