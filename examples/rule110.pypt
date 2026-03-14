@@ -1,0 +1,96 @@
+func inicializa(lista, largura):
+    i = 0
+    enquanto i < largura:
+        lista[i] = 0
+        i = i+1
+    fim
+    meio = largura >> 1
+    lista[meio] = 1
+fim
+
+func escreva_lista(lista, largura):
+    i = 0
+    enquanto i < largura:
+        se lista[i]:
+            escreva("#")
+        senao
+            escreva(" ")
+        fim
+        i = i+1
+    fim
+    escreva("\n")
+fim
+
+func rule110(esquerda, meio, direita):
+    se esquerda == 1 e meio == 1 e direita == 1:
+        retorne 0
+    fim
+    se esquerda == 1 e meio == 1 e direita == 0:
+        retorne 1
+    fim
+    se esquerda == 1 e meio == 0 e direita == 1:
+        retorne 1
+    fim
+    se esquerda == 1 e meio == 0 e direita == 0:
+        retorne 0
+    fim
+    se esquerda == 0 e meio == 1 e direita == 1:
+        retorne 1
+    fim
+    se esquerda == 0 e meio == 1 e direita == 0:
+        retorne 1
+    fim
+    se esquerda == 0 e meio == 0 e direita == 1:
+        retorne 1
+    fim
+    se esquerda == 0 e meio == 0 e direita == 0:
+        retorne 0
+    fim
+fim
+
+func computa_proxima_geracao(a, b, largura):
+    esquerda = 0
+    meio = 0
+    direita = 0
+
+    i = 0
+    enquanto i < largura:
+        esquerda = i - 1
+        se esquerda < 0:
+            esquerda = largura - 1
+        fim
+
+        meio = i
+
+        direita = i + 1
+        se direita >= largura:
+            direita = 0
+        fim
+
+        b[i] = rule110(a[esquerda], a[meio], a[direita])
+
+        i = i+1
+    fim
+fim
+
+
+interacoes = 100
+largura = 80
+a[80];
+b[80];
+
+inicializa(a, largura)
+
+i = 0
+tmp = 0
+enquanto i < interacoes:
+    escreva_lista(a, largura)
+
+    computa_proxima_geracao(a, b, largura)
+
+    tmp = a
+    a = b
+    b = tmp
+
+    i = i+1
+fim
