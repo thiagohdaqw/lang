@@ -428,7 +428,7 @@ static void _create_array(AsmCompiler *c, CScope *s, Arena *a, int depth, CNode 
 
     int word_size = wordsize_index(identifier->expr->size);
 
-    int block_size = length = wordsize_value(word_size);
+    int block_size = length * wordsize_value(word_size);
     int block_allocation = (ASM_WORD_SIZE + block_size) / ASM_WORD_SIZE;
 
     asm_fwritel(c, a, depth, "sub rsp, %d", block_allocation * ASM_WORD_SIZE);

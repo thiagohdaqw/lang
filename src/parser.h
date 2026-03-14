@@ -528,16 +528,16 @@ static ExprNode *_parse_export(Lexer *lexer, Arena *arena) {
 }
 
 static ExprNode *_parse_identifier(Lexer *lexer, Arena *arena) {
-    int size = 0;
+    ExprNode *id = _node_identifier(arena, lexer->token.identifier_value, 0);
 
     if (lexer_peek_next_char(lexer) == '<') {
         lexer_next_token(lexer);
         lexer_expect_token(lexer, T_LONG);
-        size = lexer->token.long_value;
-    
+        id->size = lexer->token.long_value;
+
         lexer_expect_token(lexer, T_GREATER);
     }
-    
+
     switch (lexer_peek_next_char(lexer)) {
     case '(':
         return _parse_funcall(arena, lexer);
@@ -545,7 +545,6 @@ static ExprNode *_parse_identifier(Lexer *lexer, Arena *arena) {
         Reader reader = lexer_save_reader(lexer);
 
         lexer_next_token(lexer);
-        ExprNode *id = _node_identifier(arena, lexer->token.identifier_value, size);
         ExprNode *index = parser_parse_expression(lexer, arena);
         lexer_expect_literal(lexer, ']');
 
@@ -554,12 +553,11 @@ static ExprNode *_parse_identifier(Lexer *lexer, Arena *arena) {
             return node_array(arena, id, index);
         } else {
             lexer_rewind_reader(lexer, reader);
-            return _node_identifier(arena, lexer->token.identifier_value, size);
+            return id;
         }
     } break;
-    default:
-        return _node_identifier(arena, lexer->token.identifier_value, size);
     }
+    return id;
 }
 
 ExprNode *_parse_funcall(Arena *arena, Lexer *lexer) {
@@ -626,7 +624,7 @@ static void _print_expression(ExprNode *expr, int depth) {
         printf("NUMBER(%lf)", expr->number_value);
         break;
     case P_IDENTIFIER:
-        printf("ID(%s)", expr->string_value);
+        printf("ID(%s<%d>)", expr->string_value, expr->size);
         break;
     case P_FUNC_CALL:
         printf("FUNCALL(%s,\n", expr->string_value);
@@ -668,6 +666,20 @@ static void _print_expression(ExprNode *expr, int depth) {
         _print_expression(expr->second, depth + 1);
         printf(")");
         break;
+    case P_SHIFTR:
+        printf("SHIFTR(\n");
+        _print_expression(expr->first, depth + 1);
+        printf(",\n");
+        _print_expression(expr->second, depth + 1);
+        printf(")");
+        break;
+    case P_SHIFTL:
+        printf("SHIFTL(\n");
+        _print_expression(expr->first, depth + 1);
+        printf(",\n");
+        _print_expression(expr->second, depth + 1);
+        printf(")");
+        break;
     case P_MINUS:
         printf("MINUS(\n");
         _print_expression(expr->first, depth + 1);
@@ -698,8 +710,6 @@ static void _print_expression(ExprNode *expr, int depth) {
     case P_INDEX:
         printf("INDEX(\n");
         _print_expression(expr->first, depth + 1);
-        printf("\n");
-        print_ws(depth + 1);
         printf(",\n");
         _print_expression(expr->second, depth + 1);
         printf(")");
@@ -707,8 +717,6 @@ static void _print_expression(ExprNode *expr, int depth) {
     case P_ARRAY:
         printf("ARRAY(\n");
         _print_expression(expr->first, depth + 1);
-        printf("\n");
-        print_ws(depth + 1);
         printf(",\n");
         _print_expression(expr->second, depth + 1);
         printf(")");
