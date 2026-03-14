@@ -33,7 +33,7 @@
 - [x] - Link com a GLIBC
 - [] - Construção de uma biblioteca padrão
   - [] - IO
-    - [-] - escreva(a, b, ...) / print()
+    - [x] - escreva(a, b, ...) / print()
     - [] - leia()
 - [] - Melhorias
   - [] - Se assemelhar a sintaxe do python
