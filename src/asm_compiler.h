@@ -535,6 +535,7 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, Arena *a, int depth, E
     case P_SHIFTL:
     case P_SHIFTR:
     case P_EQUAL:
+    case P_NEQUAL:
     case P_GREATER:
     case P_GEQUAL:
     case P_LESS:
@@ -564,6 +565,12 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, Arena *a, int depth, E
             asm_write(c, depth, "xor rax, rax\n");
             asm_fwritel(c, a, depth, "cmp %s, %s", RDX_ARG[word_size], RCX_ARG[word_size]);
             asm_write(c, depth, "sete ah\n");
+            result->location.identifier = "rax";
+            break;
+        case P_NEQUAL:
+            asm_write(c, depth, "xor rax, rax\n");
+            asm_fwritel(c, a, depth, "cmp %s, %s", RDX_ARG[word_size], RCX_ARG[word_size]);
+            asm_write(c, depth, "setne ah\n");
             result->location.identifier = "rax";
             break;
         case P_GREATER:

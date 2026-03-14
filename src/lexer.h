@@ -27,6 +27,7 @@ typedef enum token_t {
     T_CBRACKET,
     T_ASSIGN,
     T_EQUAL,
+    T_NEQUAL,
     T_LESS,
     T_LEQUAL,
     T_GREATER,
@@ -214,45 +215,52 @@ static bool parse_string(Lexer *lexer) {
 
 static bool parse_literal(Lexer *lexer) {
     lexer->token.literal_value = get_char(lexer);
+    lexer->token.type = T_LITERAL;
 
     switch (get_char(lexer)) {
     case '+':
         lexer->token.type = T_PLUS;
-        return lexer;
+        break;
     case '-':
         lexer->token.type = T_MINUS;
-        return lexer;
+        break;
     case '*':
         lexer->token.type = T_MULT;
 
         if (lexer_peek_next_char(lexer) == '*') {
             lexer_next_token(lexer);
             lexer->token.type = T_POW;
-            break;
         }
-        return lexer;
+        break;
     case '/':
         lexer->token.type = T_DIV;
-        return lexer;
+        break;
     case '{':
         lexer->token.type = T_OBRACKET;
-        return lexer;
+        break;
     case '}':
         lexer->token.type = T_CBRACKET;
-        return lexer;
+        break;
     case '(':
         lexer->token.type = T_OPAREN;
-        return lexer;
+        break;
     case ')':
         lexer->token.type = T_CPAREN;
-        return lexer;
+        break;
     case '=': {
         lexer->token.type = T_ASSIGN;
         if (lexer_peek_next_char(lexer) == '=') {
             lexer->token.type = T_EQUAL;
             next_char(lexer);
         }
-        return lexer;
+        break;
+    }
+    case '!': {
+        if (lexer_peek_next_char(lexer) == '=') {
+            lexer->token.type = T_NEQUAL;
+            next_char(lexer);
+        }
+        break;
     }
     case '<': {
         lexer->token.type = T_LESS;
@@ -264,8 +272,9 @@ static bool parse_literal(Lexer *lexer) {
         case '<':
             lexer->token.type = T_SHIFTL;
             next_char(lexer);
+            break;
         }
-        return lexer;
+        break;
     }
     case '>': {
         lexer->token.type = T_GREATER;
@@ -279,11 +288,9 @@ static bool parse_literal(Lexer *lexer) {
             next_char(lexer);
             break;
         }
-        return lexer;
+        break;
     }
     }
-
-    lexer->token.type = T_LITERAL;
     return true;
 }
 

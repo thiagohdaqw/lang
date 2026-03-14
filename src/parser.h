@@ -17,6 +17,7 @@ typedef enum {
     P_SHIFTR,
     P_SHIFTL,
     P_EQUAL,
+    P_NEQUAL,
     P_LESS,
     P_LEQUAL,
     P_GREATER,
@@ -266,6 +267,8 @@ ExprNode *node_op(Arena *a, TokenType op, ExprNode *left, ExprNode *right) {
         return node_binop(a, P_OR, left, right);
     case T_EQUAL:
         return node_binop(a, P_EQUAL, left, right);
+    case T_NEQUAL:
+        return node_binop(a, P_NEQUAL, left, right);
     case T_LESS:
         return node_binop(a, P_LESS, left, right);
     case T_LEQUAL:
@@ -298,6 +301,7 @@ static int get_infix_power(TokenType type) {
     case T_SHIFTL:
         return 50;
     case T_EQUAL:
+    case T_NEQUAL:
     case T_LESS:
     case T_LEQUAL:
     case T_GREATER:
@@ -407,6 +411,7 @@ static ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
         case T_SHIFTL:
         case T_SHIFTR:
         case T_EQUAL:
+        case T_NEQUAL:
         case T_AND:
         case T_OR:
         case T_LESS:
