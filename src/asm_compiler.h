@@ -238,7 +238,7 @@ static void fetch_node(AsmCompiler *c, Arena *a, int depth, const char *reg, CNo
         asm_fwritel(c, a, depth, "mov %s, [%s]", reg, node->location.identifier);
         break;
     case STR:
-        asm_fwritel(c, a, depth, "mov %s, %s", reg, node->location.identifier);
+        asm_fwritel(c, a, depth, "lea %s, [%s]", reg, node->location.identifier);
         break;
     default:
         assert(0 && "location type not implemented");
@@ -276,10 +276,8 @@ void _generate_main_section(AsmCompiler *c) {
         result = _compile_expression(c, &c->main_scope, &c->allocator, 1, current, RAX_ARG, WORD64);
     }
 
-    if (result && result->expr->type != P_RETURN && result->location.identifier) {
-        fetch_node(c, &c->allocator, 1, "rcx", result);
-        asm_fwritel(c, &c->allocator, 1, "xor rax, rax");
-        asm_fwritel(c, &c->allocator, 1, "mov rax, rcx");
+    if (!result || result->expr->type != P_RETURN) {
+        asm_fwritel(c, &c->allocator, 1, "mov rax, 0");
     }
 
     asm_write(c, 0, "pypt_main_ret:\n");
@@ -399,7 +397,12 @@ static void _assign_var(AsmCompiler *c, CScope *s, Arena *a, int depth, CNode *i
     CNode *existing = shget(current->vars, identifier->expr->string_value);
 
     if (existing) {
-        asm_fwrite(c, a, depth, "mov [%s], %s\n", existing->location.identifier, value->location.identifier);
+        if (value->location.type == ADDR) {
+            asm_fwrite(c, a, depth, "mov rax, [%s]\n", value->location.identifier);
+            asm_fwrite(c, a, depth, "mov [%s], rax\n", existing->location.identifier);
+        } else {
+            asm_fwrite(c, a, depth, "mov [%s], %s\n", existing->location.identifier, value->location.identifier);
+        }
         return;
     }
 
@@ -627,6 +630,9 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, Arena *a, int depth, E
             char *prefix = existing_func->exportable ? "" : "func_";
             asm_fwrite(c, a, depth, "call %s%s\n", prefix, expr->string_value);
         } else {
+            // Align stack to 16bytes
+            asm_fwritel(c, a, depth, "sub rsp, 8");
+            asm_fwritel(c, a, depth, "and rsp, -16");
             asm_fwrite(c, a, depth, "call %s\n", expr->string_value);
         }
 
@@ -698,8 +704,7 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, Arena *a, int depth, E
     case P_STRING: {
         CNode *existing = shget(c->data, expr->string_value);
         if (existing) {
-            result->location.type = ADDR;
-            result->location.identifier = existing->location.identifier;
+            result->location = existing->location;
             return result;
         } else {
             result->location.identifier = arena_strformat(a, "dat_%d", shlen(c->data));

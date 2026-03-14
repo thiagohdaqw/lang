@@ -166,8 +166,9 @@ static bool parse_char(Lexer *lexer) {
         LEXER_ERROR_PRINT(lexer, "Expected a ' character but got EOF\n");
         return false;
     }
-    if (lexer->token.char_value == '\\' && get_char(lexer) == 'n') {
+    if (get_char(lexer) == 'n') {
         lexer->token.char_value = '\n';
+        return true;
     }
     if (get_char(lexer) != '\'') {
         LEXER_ERROR_PRINT(lexer, "Expected a ' character but got %c\n", get_char(lexer));
