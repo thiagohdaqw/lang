@@ -1,0 +1,22 @@
+func fibonacci(n):
+    a = 0
+    b = 1
+    tmp = 0
+
+    escrevaf("%d ", b)
+
+    i = 0
+    enquanto i < n:
+        tmp = a + b
+        a = b
+        b = tmp
+        i = i+1
+        escrevaf("%d ", b)
+    fim 
+
+    escreva("\n")
+fim
+
+
+escreval("Sequencia de fibonacci de 20 elementos")
+fibonacci(20)

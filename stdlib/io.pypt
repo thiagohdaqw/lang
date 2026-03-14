@@ -1,12 +1,11 @@
 exporte func escreva(texto):
-    write(1, texto, strlen(texto))
-fim
-
-exporte func escreval(texto):
-    escreva(texto)
-    escreva("\n")
+    printf("%s", texto)
 fim
 
 exporte func escrevaf(formato, a, b, c, d, f):
     printf(formato, a, b, c, d, f)
+fim
+
+exporte func escreval(texto):
+    printf("%s\n", texto) 
 fim

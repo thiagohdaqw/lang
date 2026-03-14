@@ -631,9 +631,13 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, Arena *a, int depth, E
             asm_fwrite(c, a, depth, "call %s%s\n", prefix, expr->string_value);
         } else {
             // Align stack to 16bytes
-            asm_fwritel(c, a, depth, "sub rsp, 8");
+            asm_fwritel(c, a, depth, "mov rax, rsp");
+            asm_fwritel(c, a, depth, "sub rsp, 16");
             asm_fwritel(c, a, depth, "and rsp, -16");
+            asm_fwritel(c, a, depth, "push 0");
+            asm_fwritel(c, a, depth, "push rax");
             asm_fwrite(c, a, depth, "call %s\n", expr->string_value);
+            asm_fwritel(c, a, depth, "pop rsp");
         }
 
         result->location.identifier = RAX_ARG[word_size];

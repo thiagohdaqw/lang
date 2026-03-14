@@ -1,2 +1,0 @@
-escrevaf("%d %d %s\n", 69, 41, "ola mundo")
-retorne 69
