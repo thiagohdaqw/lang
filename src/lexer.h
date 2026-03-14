@@ -41,6 +41,8 @@ typedef enum token_t {
     T_DEREF,
     T_AND,
     T_OR,
+    T_SHIFTL,
+    T_SHIFTR,
 } TokenType;
 
 typedef struct token {
@@ -254,17 +256,28 @@ static bool parse_literal(Lexer *lexer) {
     }
     case '<': {
         lexer->token.type = T_LESS;
-        if (lexer_peek_next_char(lexer) == '=') {
+        switch (lexer_peek_next_char(lexer)) {
+        case '=':
             lexer->token.type = T_LEQUAL;
+            next_char(lexer);
+            break;
+        case '<':
+            lexer->token.type = T_SHIFTL;
             next_char(lexer);
         }
         return lexer;
     }
     case '>': {
         lexer->token.type = T_GREATER;
-        if (lexer_peek_next_char(lexer) == '=') {
+        switch (lexer_peek_next_char(lexer)) {
+        case '=':
             lexer->token.type = T_GEQUAL;
             next_char(lexer);
+            break;
+        case '>':
+            lexer->token.type = T_SHIFTR;
+            next_char(lexer);
+            break;
         }
         return lexer;
     }

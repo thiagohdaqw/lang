@@ -1,5 +1,5 @@
 exporte func escreva(texto):
-    printf("%s", texto)
+    printf("%s", texto) 
 fim
 
 exporte func escrevaf(formato, a, b, c, d, f):

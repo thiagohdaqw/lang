@@ -14,6 +14,8 @@ typedef enum {
     P_MINUS,
     P_IDENTIFIER,
     P_DIV,
+    P_SHIFTR,
+    P_SHIFTL,
     P_EQUAL,
     P_LESS,
     P_LEQUAL,
@@ -272,6 +274,10 @@ ExprNode *node_op(Arena *a, TokenType op, ExprNode *left, ExprNode *right) {
         return node_binop(a, P_GREATER, left, right);
     case T_GEQUAL:
         return node_binop(a, P_GEQUAL, left, right);
+    case T_SHIFTL:
+        return node_binop(a, P_SHIFTL, left, right);
+    case T_SHIFTR:
+        return node_binop(a, P_SHIFTR, left, right);
     default:
         fprintf(stderr, "Unexpected op node type: %d\n", op);
         assert(0 && "Unexpected op node type");
@@ -281,12 +287,15 @@ ExprNode *node_op(Arena *a, TokenType op, ExprNode *left, ExprNode *right) {
 static int get_infix_power(TokenType type) {
     switch (type) {
     case T_POW:
-        return 70;
+        return 80;
     case T_MULT:
     case T_DIV:
-        return 60;
+        return 70;
     case T_PLUS:
     case T_MINUS:
+        return 60;
+    case T_SHIFTR:
+    case T_SHIFTL:
         return 50;
     case T_EQUAL:
     case T_LESS:
@@ -395,6 +404,8 @@ static ExprNode *_parser_expression(Lexer *lexer, Arena *arena, int power) {
         if (!lexer_next_token(lexer)) return left;
 
         switch (lexer->token.type) {
+        case T_SHIFTL:
+        case T_SHIFTR:
         case T_EQUAL:
         case T_AND:
         case T_OR:

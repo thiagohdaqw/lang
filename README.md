@@ -41,6 +41,7 @@
     - [] - Adicionar : no senao
   - [] - Mensagens de erro com arquivo, linha e coluna
   - [] - Traduzir enums
+  - [] - Resetar stack na repetição/saida do while
 - [] - Otimização
   - [] - Otimizar escolha de registrador
   - [] - Pré calcular expressões em tempo de compilação

@@ -532,6 +532,8 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, Arena *a, int depth, E
         }
         return result;
     }
+    case P_SHIFTL:
+    case P_SHIFTR:
     case P_EQUAL:
     case P_GREATER:
     case P_GEQUAL:
@@ -593,6 +595,12 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, Arena *a, int depth, E
             break;
         case P_OR:
             asm_fwritel(c, a, depth, "or %s, %s", RDX_ARG[word_size], RCX_ARG[word_size]);
+            break;
+        case P_SHIFTL:
+            asm_fwritel(c, a, depth, "shl %s, %s", RDX_ARG[word_size], RCX_ARG[WORD8]);
+            break;
+        case P_SHIFTR:
+            asm_fwritel(c, a, depth, "shr %s, %s", RDX_ARG[word_size], RCX_ARG[WORD8]);
             break;
         default:
             assert(0 && "op not implemented");
