@@ -530,16 +530,17 @@ static ExprNode *_parse_export(Lexer *lexer, Arena *arena) {
 static ExprNode *_parse_identifier(Lexer *lexer, Arena *arena) {
     int size = 0;
 
-    switch (lexer_peek_next_char(lexer)) {
-    case '(':
-        return _parse_funcall(arena, lexer);
-    case '<': {
+    if (lexer_peek_next_char(lexer) == '<') {
         lexer_next_token(lexer);
         lexer_expect_token(lexer, T_LONG);
         size = lexer->token.long_value;
-
+    
         lexer_expect_token(lexer, T_GREATER);
     }
+    
+    switch (lexer_peek_next_char(lexer)) {
+    case '(':
+        return _parse_funcall(arena, lexer);
     case '[': {
         Reader reader = lexer_save_reader(lexer);
 

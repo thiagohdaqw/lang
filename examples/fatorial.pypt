@@ -1,0 +1,18 @@
+func fatorial(n):
+    resultado = 1
+    i = 1
+    enquanto i <= n:
+        resultado = resultado * i
+        i = i+1
+    fim
+    
+    retorne resultado
+fim
+
+escrevaf("Fatorial de 1 é %d\n", fatorial(1))
+escrevaf("Fatorial de 2 é %d\n", fatorial(2))
+escrevaf("Fatorial de 3 é %d\n", fatorial(3))
+escrevaf("Fatorial de 4 é %d\n", fatorial(4))
+escrevaf("Fatorial de 5 é %d\n", fatorial(5))
+
+retorne 0
