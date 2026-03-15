@@ -666,6 +666,27 @@ static void _print_expression(ExprNode *expr, int depth) {
         _print_expression(expr->second, depth + 1);
         printf(")");
         break;
+    case P_GEQUAL:
+        printf("LEQUAL(\n");
+        _print_expression(expr->first, depth + 1);
+        printf(",\n");
+        _print_expression(expr->second, depth + 1);
+        printf(")");
+        break;
+    case P_LEQUAL:
+        printf("LEQUAL(\n");
+        _print_expression(expr->first, depth + 1);
+        printf(",\n");
+        _print_expression(expr->second, depth + 1);
+        printf(")");
+        break;
+    case P_OR:
+        printf("OR(\n");
+        _print_expression(expr->first, depth + 1);
+        printf(",\n");
+        _print_expression(expr->second, depth + 1);
+        printf(")");
+        break;
     case P_SHIFTR:
         printf("SHIFTR(\n");
         _print_expression(expr->first, depth + 1);
@@ -695,7 +716,7 @@ static void _print_expression(ExprNode *expr, int depth) {
         printf(")");
         break;
     case P_FUNC:
-        printf("FUNC(%s, args = %d, body = %d)\n", expr->string_value, expr->args.count, expr->count);
+        printf("FUNC(%s, args = %d, body = %d)\n", expr->string_value, expr->args.count, expr->first->count);
         break;
     case P_DEREF:
         printf("DREF(\n");

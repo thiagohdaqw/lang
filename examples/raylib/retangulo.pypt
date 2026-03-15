@@ -1,0 +1,50 @@
+altura = 800
+largura = 600
+InitWindow(altura, largura, "Raylib por PYPT")
+SetTargetFPS(60)
+
+gray<1>[4];
+gray[0] = 130
+gray[1] = 130
+gray[2] = 130
+gray[3] = 255
+
+red<1>[4];
+red[0] = 255
+red[1] = 0
+red[2] = 0
+red[3] = 255
+
+x = 0
+novo_x = 0
+y = 0
+novo_y = 0
+
+retangulo_tamanho = 50
+velocidade_x = 2
+velocidade_y = 2
+
+enquanto WindowShouldClose() == 0:
+    novo_x = x + velocidade_x
+    novo_y = y + velocidade_y
+
+    se novo_x <= 0 ou novo_x + retangulo_tamanho >= altura:
+        velocidade_x = velocidade_x * -1
+    fim
+    se novo_y <= 0 ou novo_y + retangulo_tamanho >= largura:
+        velocidade_y = velocidade_y * -1
+    fim
+
+    x = x+velocidade_x
+    y = y+velocidade_y
+
+
+    BeginDrawing()
+    ClearBackground(gray[0])
+
+    DrawRectangle(x, y, retangulo_tamanho, retangulo_tamanho, red[0])
+
+    EndDrawing()
+fim
+
+CloseWindow()

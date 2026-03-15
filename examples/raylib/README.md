@@ -4,9 +4,12 @@
 2. Builde o compilador `make`
 3. Builde o exemplo `janela.pypt`
 ```
-$ ./bin/main examples/raylib/janela.pypt -L "-L../raylib/raylib-5.5_linux_amd64/lib/ -Wl,-rpath='../raylib/raylib-5.5_linux_amd64/lib/' -lraylib -lm"
+$ ./bin/main examples/raylib/janela.pypt -L "-L<CAMINHO_DO_RAYLIB>/raylib-5.5_linux_amd64/lib/ -Wl,-rpath='<CAMINHO_DO_RAYLIB>/raylib-5.5_linux_amd64/lib/' -lraylib -lm"
 ```
 4. Execute o programa
 ```
 $ ./main
 ```
+
+### retangulo.pypt
+$ ./bin/main examples/raylib/retangulo.pypt -L "-L<CAMINHO_DO_RAYLIB>/raylib-5.5_linux_amd64/lib/ -Wl,-rpath='<CAMINHO_DO_RAYLIB>/raylib-5.5_linux_amd64/lib/' -lraylib -lm"

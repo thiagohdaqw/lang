@@ -564,37 +564,37 @@ CNode *_compile_expression(AsmCompiler *c, CScope *scope, Arena *a, int depth, E
         case P_EQUAL:
             asm_write(c, depth, "xor rax, rax\n");
             asm_fwritel(c, a, depth, "cmp %s, %s", RDX_ARG[word_size], RCX_ARG[word_size]);
-            asm_write(c, depth, "sete ah\n");
+            asm_write(c, depth, "sete al\n");
             result->location.identifier = "rax";
             break;
         case P_NEQUAL:
             asm_write(c, depth, "xor rax, rax\n");
             asm_fwritel(c, a, depth, "cmp %s, %s", RDX_ARG[word_size], RCX_ARG[word_size]);
-            asm_write(c, depth, "setne ah\n");
+            asm_write(c, depth, "setne al\n");
             result->location.identifier = "rax";
             break;
         case P_GREATER:
             asm_write(c, depth, "xor rax, rax\n");
             asm_fwritel(c, a, depth, "cmp %s, %s", RDX_ARG[word_size], RCX_ARG[word_size]);
-            asm_write(c, depth, "setg ah\n");
+            asm_write(c, depth, "setg al\n");
             result->location.identifier = "rax";
             break;
         case P_GEQUAL:
             asm_write(c, depth, "xor rax, rax\n");
             asm_fwritel(c, a, depth, "cmp %s, %s", RDX_ARG[word_size], RCX_ARG[word_size]);
-            asm_write(c, depth, "setge ah\n");
+            asm_write(c, depth, "setge al\n");
             result->location.identifier = "rax";
             break;
         case P_LESS:
             asm_write(c, depth, "xor rax, rax\n");
             asm_fwritel(c, a, depth, "cmp %s, %s", RDX_ARG[word_size], RCX_ARG[word_size]);
-            asm_write(c, depth, "setl ah\n");
+            asm_write(c, depth, "setl al\n");
             result->location.identifier = "rax";
             break;
         case P_LEQUAL:
             asm_write(c, depth, "xor rax, rax\n");
             asm_fwritel(c, a, depth, "cmp %s, %s", RDX_ARG[word_size], RCX_ARG[word_size]);
-            asm_write(c, depth, "setle ah\n");
+            asm_write(c, depth, "setle al\n");
             result->location.identifier = "rax";
             break;
         case P_AND:
