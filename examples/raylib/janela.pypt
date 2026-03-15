@@ -1,0 +1,17 @@
+
+InitWindow(800, 600, "Raylib por PYPT")
+
+gray<1>[4];
+gray[0] = 130
+gray[1] = 130
+gray[2] = 130
+gray[3] = 255
+
+
+enquanto WindowShouldClose() == 0:
+    BeginDrawing()
+    ClearBackground(gray[0])
+    EndDrawing()
+fim
+
+CloseWindow()
