@@ -145,9 +145,11 @@ void compiler_parse_args(CompilerConfig *config, int argc, char **argv) {
     for (size_t i = 2; i < argc; i++) {
         char *arg = argv[i];
         if (strcmp("-o", arg) == 0 && i + 1 < argc) {
-            config->output = argv[i++];
+            config->output = argv[++i];
         } else if (strcmp("-C", arg) == 0) {
             config->output_object = true;
+        } else if (strcmp("-L", arg) == 0 && i + 1 < argc) {
+            config->linker_args = argv[++i];
         }
     }
 }
